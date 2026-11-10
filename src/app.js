@@ -1739,13 +1739,29 @@ async function rerender() {
 
 async function main() {
   cursor.el = $('cursor'); cursor.badge = $('cbadge');
-  if (!navigator.requestMIDIAccess) {
+  // MIDI 状态：设置面板里始终显示一行，方便在 iPhone 等设备上确认浏览器到底有没有提供 Web MIDI
+  const coarse = window.matchMedia && matchMedia('(pointer:coarse)').matches;
+  const midiInfo = () => {
+    const g = Object.getOwnPropertyNames(window).filter((n) => /midi/i.test(n));
+    const nv = []; for (const k in navigator) if (/midi/i.test(k)) nv.push(k);
+    const wk = !!(window.webkit && window.webkit.messageHandlers);
+    const ua = (navigator.userAgent.match(/\(([^)]*)\)/) || ['', ''])[1];
+    return `req=${typeof navigator.requestMIDIAccess}，nav=${nv.join('/') || '无'}，win=${g.length}，wk=${wk ? '有' : '无'}，${ua}`;
+  };
+  const midiReady = (late) => {
+    document.body.classList.remove('nomidi');
+    $('midiDiag').textContent = 'MIDI：浏览器支持' + (late ? '（页面打开后才出现）' : '') + '，插上键盘后点下面的“🎹 连接 MIDI 键盘”。';
+    if (coarse) toast('检测到 MIDI 支持：点 ⚙ 设置 → 🎹 连接 MIDI 键盘');
+  };
+  if (navigator.requestMIDIAccess) midiReady(false);
+  else {
     // iOS 上的 MIDI 浏览器（如 MIDIWeb Browser）可能在页面脚本之后才注入 Web MIDI，这里再等 10 秒
     document.body.classList.add('nomidi');
+    $('midiDiag').textContent = 'MIDI：正在检测浏览器是否支持…';
     let tries = 0;
     const poll = setInterval(() => {
-      if (navigator.requestMIDIAccess) { document.body.classList.remove('nomidi'); clearInterval(poll); }
-      else if (++tries >= 20) clearInterval(poll);
+      if (navigator.requestMIDIAccess) { clearInterval(poll); midiReady(true); }
+      else if (++tries >= 20) { clearInterval(poll); $('midiDiag').textContent = 'MIDI：当前浏览器不支持 Web MIDI（已等 10 秒）。诊断：' + midiInfo(); }
     }, 500);
   }
   $('bRotOk').onclick = () => document.body.classList.add('rot-ok');

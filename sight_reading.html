@@ -40,6 +40,7 @@ button,label,#top,#kbd{-webkit-user-select:none;user-select:none}
 #settings .row{font-size:13px}
 #settings input[type=range]{width:90px;accent-color:var(--accent)}
 #seedTxt{color:#9aa0ab}
+#midiDiag{color:#9aa0ab;font-size:12px;flex-basis:100%;word-break:break-all}
 .brand{font-weight:700;letter-spacing:.5px;color:#fff;margin-right:4px}
 .brand small{font-weight:400;color:#9aa0ab;margin-left:4px}
 #main{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}
@@ -163,6 +164,10 @@ body.nomidi .midi{display:none!important}
   </div>
   <div id="settings" hidden>
     <div class="row">
+      <span id="midiDiag"></span>
+      <button id="bMidi" class="midi">🎹 连接 MIDI 键盘</button>
+      <label class="midi"><input type="checkbox" id="cFollow" disabled> 等待模式（弹对才前进）</label>
+      <label class="midi"><input type="checkbox" id="cMidiSound"> MIDI 输入发声</label>
       <label>声音 <select id="selSound"><option value="all">全部播放（听+看）</option><option value="others">只播我不弹的手</option><option value="none">静音（只跟光标）</option></select></label>
       <label>我弹 <select id="selHand"><option value="both">双手</option><option value="rh">右手</option><option value="lh">左手</option></select></label>
       <label><input type="checkbox" id="cLoop"> 循环本曲 (L)</label>
@@ -172,9 +177,6 @@ body.nomidi .midi{display:none!important}
       <label><input type="checkbox" id="cKbd" checked> 屏幕键盘</label>
       <label>音量 <input type="range" id="vol" min="0" max="100" value="80"></label>
       <label>谱面大小 <input type="range" id="zoom" min="50" max="100" step="5" value="100"></label>
-      <button id="bMidi" class="midi">🎹 连接 MIDI 键盘</button>
-      <label class="midi"><input type="checkbox" id="cFollow" disabled> 等待模式（弹对才前进）</label>
-      <label class="midi"><input type="checkbox" id="cMidiSound"> MIDI 输入发声</label>
       <button id="bNew">🎲 换一套新谱</button>
       <span id="seedTxt"></span>
     </div>
@@ -206,7 +208,7 @@ body.nomidi .midi{display:none!important}
   </ul>
   <h3>连接电子琴 / MIDI 键盘（Chrome、Edge）</h3>
   <ul>
-    <li>用 USB 连接后点“连接 MIDI 键盘”。播放时弹对的音符变<span style="color:var(--ok)">绿</span>，漏掉的变<span style="color:var(--bad)">红</span>，每首结束显示正确率。</li>
+    <li>用 USB 连接后，点“⚙ 设置”里的“🎹 连接 MIDI 键盘”。播放时弹对的音符变<span style="color:var(--ok)">绿</span>，漏掉的变<span style="color:var(--bad)">红</span>，每首结束显示正确率。</li>
     <li><b>等待模式</b>：光标停在每个音上，弹对了才往前走，适合刚开始练某一级的时候。</li>
   </ul>
   <h3>iPhone / iPad（横屏）</h3>
@@ -1970,13 +1972,29 @@ async function rerender() {
 
 async function main() {
   cursor.el = $('cursor'); cursor.badge = $('cbadge');
-  if (!navigator.requestMIDIAccess) {
+  // MIDI 状态：设置面板里始终显示一行，方便在 iPhone 等设备上确认浏览器到底有没有提供 Web MIDI
+  const coarse = window.matchMedia && matchMedia('(pointer:coarse)').matches;
+  const midiInfo = () => {
+    const g = Object.getOwnPropertyNames(window).filter((n) => /midi/i.test(n));
+    const nv = []; for (const k in navigator) if (/midi/i.test(k)) nv.push(k);
+    const wk = !!(window.webkit && window.webkit.messageHandlers);
+    const ua = (navigator.userAgent.match(/\(([^)]*)\)/) || ['', ''])[1];
+    return `req=${typeof navigator.requestMIDIAccess}，nav=${nv.join('/') || '无'}，win=${g.length}，wk=${wk ? '有' : '无'}，${ua}`;
+  };
+  const midiReady = (late) => {
+    document.body.classList.remove('nomidi');
+    $('midiDiag').textContent = 'MIDI：浏览器支持' + (late ? '（页面打开后才出现）' : '') + '，插上键盘后点下面的“🎹 连接 MIDI 键盘”。';
+    if (coarse) toast('检测到 MIDI 支持：点 ⚙ 设置 → 🎹 连接 MIDI 键盘');
+  };
+  if (navigator.requestMIDIAccess) midiReady(false);
+  else {
     // iOS 上的 MIDI 浏览器（如 MIDIWeb Browser）可能在页面脚本之后才注入 Web MIDI，这里再等 10 秒
     document.body.classList.add('nomidi');
+    $('midiDiag').textContent = 'MIDI：正在检测浏览器是否支持…';
     let tries = 0;
     const poll = setInterval(() => {
-      if (navigator.requestMIDIAccess) { document.body.classList.remove('nomidi'); clearInterval(poll); }
-      else if (++tries >= 20) clearInterval(poll);
+      if (navigator.requestMIDIAccess) { clearInterval(poll); midiReady(true); }
+      else if (++tries >= 20) { clearInterval(poll); $('midiDiag').textContent = 'MIDI：当前浏览器不支持 Web MIDI（已等 10 秒）。诊断：' + midiInfo(); }
     }, 500);
   }
   $('bRotOk').onclick = () => document.body.classList.add('rot-ok');
