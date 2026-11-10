@@ -1269,6 +1269,7 @@ async function startPlay() {
     P.countIn = { from: startT0, to: bar.t0, ex: exI, bar };
   }
   P.anchors = [{ ctx: now, t0: startT0, f: factor() }];
+  P.startT0 = startT0;
   P.nextIdx = lowerBound(S.ev, bI === 0 ? startT0 : ex.bars[bI].t0);
   P.playing = true;
   P.timer = setInterval(schedule, 25);
@@ -1414,7 +1415,8 @@ function frame() {
       if (P.pendingReset && now >= P.pendingReset.at) { showScore(P.pendingReset.ex); resetScore(P.pendingReset.ex); P.pendingReset = null; }
       const t = posT0(now);
       if (P.countIn && t >= P.countIn.to) P.countIn = null;
-      const bar = P.countIn && t < P.countIn.to ? P.countIn.bar : locateBar(t);
+      // 开始后的头 0.12 秒 t 还在起点之前，会落到上一首的最后一小节，这里按起点算
+      const bar = P.countIn && t < P.countIn.to ? P.countIn.bar : locateBar(Math.max(t, (P.startT0 ?? -Infinity) + 1e-6));
       if (bar) {
         const ex = S.exs[bar.ex];
         if (!S.rendered.has(bar.ex) || !S.rendered.has(bar.ex + 1)) { ensureRendered(bar.ex); ensureRendered(bar.ex + 1); }
@@ -1454,6 +1456,7 @@ function resetScore(gi, fromT0 = -1) {
   if (!MIDI.connected) return;
   SC[gi].exp = S.ev.filter((e) => e.kind === 'note' && e.ex === gi && e.t0 >= fromT0 - 1e-6 && practiceHand(e.hand)).map((e) => ({ t0: e.t0, midi: e.midi, e: e.e, hit: false }));
   const el = document.getElementById('sc' + gi); if (el) el.textContent = '';
+  hud();
 }
 function sweepMisses(t) {
   if (!MIDI.connected) return;
@@ -1465,8 +1468,27 @@ function sweepMisses(t) {
     sc.idx++;
   }
 }
+const NOTE_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+const noteName = (m) => NOTE_NAMES[m % 12] + (Math.floor(m / 12) - 1);
+// MIDI 状态小窗：最近收到的音、实时分数、上一首成绩（手机横屏时顶栏状态被隐藏，所以单独放一个）
+const HUD = { note: '', noteT: 0, last: '' };
+function hud() {
+  const el = document.getElementById('midiHud'); if (!el) return;
+  if (!MIDI.connected) { el.classList.remove('on'); return; }
+  const parts = [];
+  if (HUD.note && performance.now() - HUD.noteT < 1500) parts.push('🎹 ' + HUD.note); else parts.push('🎹');
+  const sc = SC[P.mode === 'follow' ? P.curEx : P.visEx];
+  if (P.playing && sc && sc.exp.length) parts.push(`✓${sc.hit} ✗${sc.miss} 错${sc.wrong}`);
+  else if (!P.playing) parts.push('按 ▶ 播放后跟着弹');
+  if (HUD.last) parts.push(HUD.last);
+  el.innerHTML = parts.map((x) => `<span>${x}</span>`).join('');
+  el.classList.add('on');
+}
+setInterval(() => { if (HUD.note && performance.now() - HUD.noteT >= 1500) { HUD.note = ''; hud(); } }, 500);
 function onNoteOn(m, vel) {
   keyHl(m, true, 'user');
+  HUD.note = noteName(m); HUD.noteT = performance.now(); hud();
+  if (!P.playing && !onNoteOn.hinted) { onNoteOn.hinted = true; toast('已收到琴键：按 ▶ 播放后跟着弹，弹对变绿、漏掉变红；想让光标等你，在设置里打开“等待模式”'); }
   if (S.settings.midiSound && AU.ctx) AU.note(m, AU.ctx.currentTime, 0.6, 0.4 + vel / 200);
   if (!P.playing) return;
   if (P.mode === 'follow') return followNote(m);
@@ -1487,8 +1509,7 @@ function onNoteOn(m, vel) {
 function onNoteOff(m) { keyHl(m, false, 'user'); }
 function updateLiveScore() {
   const sc = SC[P.mode === 'follow' ? P.curEx : P.visEx]; if (!sc) return;
-  const tot = sc.hit + sc.miss;
-  document.getElementById('live').textContent = tot ? `✓${sc.hit}  ✗${sc.miss}  错${sc.wrong}` : '';
+  hud();
 }
 function showScore(gi) {
   const sc = SC[gi]; if (!sc || !MIDI.connected) return;
@@ -1497,6 +1518,11 @@ function showScore(gi) {
   if (sc.hit + sc.miss === 0) return;
   const el = document.getElementById('sc' + gi);
   if (el) el.textContent = `正确率 ${pct}%  错音 ${sc.wrong}`;
+  const ex = S.exs[gi];
+  const name = ex ? `${ex.li === 0 ? '入门' : LEVELS[ex.li].name} 练习 ${ex.ei + 1}` : '上一首';
+  HUD.last = `${name}：${pct}%`;
+  toast(`${name}：正确率 ${pct}%（弹对 ${sc.hit}/${tot}，错音 ${sc.wrong}）`);
+  hud();
 }
 async function connectMidi() {
   if (!navigator.requestMIDIAccess) { toast('当前浏览器不支持 Web MIDI，请用 Chrome / Edge 打开'); return; }
@@ -1505,13 +1531,24 @@ async function connectMidi() {
     MIDI.access = acc;
     const bind = () => {
       let n = 0;
-      acc.inputs.forEach((inp) => { n++; inp.onmidimessage = (msg) => {
-        const [st, d1, d2] = msg.data; const cmd = st & 0xf0;
-        if (cmd === 0x90 && d2 > 0) onNoteOn(d1, d2); else if (cmd === 0x80 || (cmd === 0x90 && d2 === 0)) onNoteOff(d1);
-      }; });
+      acc.inputs.forEach((inp) => {
+        n++;
+        // 有些 iOS 上的 Web MIDI 实现只支持其中一种写法，两种都挂上；同一个事件对象只处理一次
+        const seen = new WeakSet();
+        const handle = (msg) => {
+          if (!msg || !msg.data) return;
+          if (typeof msg === 'object') { if (seen.has(msg)) return; seen.add(msg); }
+          const st = msg.data[0], d1 = msg.data[1], d2 = msg.data[2]; const cmd = st & 0xf0;
+          if (cmd === 0x90 && d2 > 0) onNoteOn(d1, d2); else if (cmd === 0x80 || (cmd === 0x90 && d2 === 0)) onNoteOff(d1);
+        };
+        inp.onmidimessage = handle;
+        if (inp.addEventListener) { try { inp.addEventListener('midimessage', handle); } catch (e) { } }
+      });
       MIDI.connected = n > 0;
       document.getElementById('bMidi').textContent = n ? `🎹 已连接 ${n} 个 MIDI 设备` : '🎹 未发现 MIDI 设备（插上后重试）';
       document.getElementById('cFollow').disabled = !MIDI.connected;
+      if (MIDI.connected && P.playing && P.mode === 'play' && AU.ctx && (!SC[P.visEx] || !SC[P.visEx].exp.length)) resetScore(P.visEx, posT0(AU.ctx.currentTime));
+      hud();
     };
     bind(); acc.onstatechange = bind;
   } catch (e) { toast('无法访问 MIDI：' + e.message); }
@@ -1599,7 +1636,7 @@ function buildKeyboard() {
 /* ======================= UI ======================= */
 function $(id) { return document.getElementById(id); }
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 3200); }
-function updatePlayBtn() { $('bPlay').innerHTML = P.playing ? '❚❚ 暂停' : '▶ 播放'; $('bPlay').classList.toggle('on', P.playing); }
+function updatePlayBtn() { $('bPlay').innerHTML = P.playing ? '❚❚ 暂停' : '▶ 播放'; $('bPlay').classList.toggle('on', P.playing); hud(); }
 function updateSpeedLabel() {
   const ex = S.exs[P.playing ? P.curEx : S.cur.ex];
   const bpm = ex ? Math.round(ex.bpm * factor()) : 0;
@@ -1608,7 +1645,7 @@ function updateSpeedLabel() {
 }
 function updateStatus(bar) {
   const ex = S.exs[bar.ex]; const L = LEVELS[ex.li];
-  $('status').innerHTML = `<b>${ex.li === 0 ? '入门' : L.name}</b> <span class="long">练习 </span>${ex.ei + 1}/${EX_PER_LEVEL} · <span class="long">第 </span>${bar.bi + 1}/${ex.bars.length}<span class="long"> 小节</span> <span id="live"></span>`;
+  $('status').innerHTML = `<b>${ex.li === 0 ? '入门' : L.name}</b> <span class="long">练习 </span>${ex.ei + 1}/${EX_PER_LEVEL} · <span class="long">第 </span>${bar.bi + 1}/${ex.bars.length}<span class="long"> 小节</span>`;
   if ($('selLevel').value !== String(ex.li)) $('selLevel').value = String(ex.li);
   updateSpeedLabel();
 }

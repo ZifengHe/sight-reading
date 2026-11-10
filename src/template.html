@@ -43,7 +43,9 @@ button,label,#top,#kbd{-webkit-user-select:none;user-select:none}
 #midiDiag{color:#9aa0ab;font-size:12px;flex-basis:100%;word-break:break-all}
 .brand{font-weight:700;letter-spacing:.5px;color:#fff;margin-right:4px}
 .brand small{font-weight:400;color:#9aa0ab;margin-left:4px}
-#main{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}
+#main{position:relative;flex:1;min-width:0;min-height:0;display:flex;flex-direction:column}
+#midiHud{display:none;color:#ffd27a;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:13px}
+#midiHud.on{display:inline-flex;gap:10px}
 #wrap{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
   padding:0 max(16px,env(safe-area-inset-right)) 0 max(16px,env(safe-area-inset-left))}
 @media (pointer:coarse){#wrap{scroll-snap-type:y mandatory}.ex{scroll-snap-align:start;scroll-snap-stop:always}}
@@ -129,6 +131,7 @@ body.nomidi .midi{display:none!important}
   .lvl-banner b{font-size:14px}
   .lvl-banner span:last-child{overflow:hidden;text-overflow:ellipsis}
   #kbd{height:calc(56px + env(safe-area-inset-bottom))}
+  #midiHud.on{display:flex;flex-direction:column;grid-column:span 2;gap:4px;font-size:12px;line-height:1.35;text-align:center;white-space:normal;margin-top:6px}
   #help{padding:10px}
   #help .card{padding:14px 18px;font-size:13px;line-height:1.6}
   #cbadge{top:-24px;height:24px;line-height:24px;font-size:15px}
@@ -160,6 +163,7 @@ body.nomidi .midi{display:none!important}
     <label id="lMetro"><input type="checkbox" id="cMetro"> <span class="long">节拍器</span><span class="short">拍</span></label>
     <button id="bSet">⚙<span class="long"> 设置</span></button>
     <button id="bHelp">?<span class="long"> 说明</span></button>
+    <div id="midiHud"></div>
     <div id="status"></div>
   </div>
   <div id="settings" hidden>
@@ -208,7 +212,8 @@ body.nomidi .midi{display:none!important}
   </ul>
   <h3>连接电子琴 / MIDI 键盘（Chrome、Edge）</h3>
   <ul>
-    <li>用 USB 连接后，点“⚙ 设置”里的“🎹 连接 MIDI 键盘”。播放时弹对的音符变<span style="color:var(--ok)">绿</span>，漏掉的变<span style="color:var(--bad)">红</span>，每首结束显示正确率。</li>
+    <li>用 USB 连接后，点“⚙ 设置”里的“🎹 连接 MIDI 键盘”。连上后工具栏里会出现 🎹 状态（手机横屏在左侧按钮下方），按任意琴键会显示音名（例如 C4），说明琴已经接通。</li>
+    <li><b>按 ▶ 播放，跟着光标弹</b>：弹对的音符变<span style="color:var(--ok)">绿</span>，漏掉的变<span style="color:var(--bad)">红</span>；小窗里实时显示 ✓弹对 ✗漏掉 错=多弹的音。每首结束会弹出这首的正确率。不按播放时弹琴不会评分。</li>
     <li><b>等待模式</b>：光标停在每个音上，弹对了才往前走，适合刚开始练某一级的时候。</li>
   </ul>
   <h3>iPhone / iPad（横屏）</h3>
