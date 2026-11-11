@@ -1099,17 +1099,63 @@ async function learnExit() {
   hud();
 }
 async function learnLoadFile(file) {
-  const u8 = new Uint8Array(await file.arrayBuffer());
+  return learnLoadBytes(new Uint8Array(await file.arrayBuffer()), file.name);
+}
+// 从文件或链接里的数据载入一首曲子；同样的内容只存一份（练习记录保留）
+async function learnLoadBytes(u8, fileName, forceName) {
+  const id = 'u' + fnv32(u8);
+  const have = pieceList().find((p) => p.id === id);
+  if (have && (await IDB.get('piece:' + id))) return { id, name: have.name, n: have.bars, existed: true };
+  const file = { name: fileName || 'score' };
   let kind, data;
   if (u8[0] === 0x50 && u8[1] === 0x4b) { kind = 'xml'; data = await unzipMusicXML(u8); }
   else if (u8[0] === 0x4d && u8[1] === 0x54 && u8[2] === 0x68 && u8[3] === 0x64) { kind = 'midi'; data = u8; }
   else { const t = decodeText(u8); if (/<score-(partwise|timewise)/.test(t)) { kind = 'xml'; data = t; } else throw new Error('认不出这个文件。请用 MusicXML（.musicxml / .xml / .mxl）或 MIDI（.mid）'); }
   const piece = kind === 'xml' ? parseMusicXML(data) : midiToPiece(parseMidi(data), file.name);
-  const name = (piece.title || file.name.replace(/\.[^.]+$/, '')).slice(0, 60);
-  const id = 'p' + Date.now().toString(36);
+  const name = (forceName || piece.title || file.name.replace(/\.[^.]+$/, '')).slice(0, 60);
   await IDB.put('piece:' + id, { kind, data, name });
-  const list = pieceList(); list.unshift({ id, name, kind, bars: piece.bars.length, added: today() }); lsSet('sr.pieces', list);
+  const list = pieceList().filter((p) => p.id !== id); list.unshift({ id, name, kind, bars: piece.bars.length, added: today() }); lsSet('sr.pieces', list);
   return { id, name, n: piece.bars.length };
+}
+function fnv32(u8) { let h = 2166136261 >>> 0; for (let i = 0; i < u8.length; i++) { h ^= u8[i]; h = Math.imul(h, 16777619) >>> 0; } return h.toString(36); }
+
+/* ---------------- 每首曲子一个链接 ----------------
+ * #pop=526        POP909 曲库里的歌：链接里只有编号，打开时从数据集下载
+ * #z=…&n=名字      自己的曲谱：整份谱压缩后放在链接的 # 后面。# 后面的内容浏览器不会发给服务器，
+ *                 所以谱子不会上传到任何地方；但拿到链接的人都能打开，只发给自己。 */
+function b64urlToBytes(s) { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; const b = atob(s); const u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
+function bytesToB64url(u) { let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+async function deflateRawBytes(u8) {
+  if (typeof CompressionStream === 'undefined') return null;
+  try { return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer()); } catch (e) { return null; }
+}
+function isSongLink(h) { return /^#?(pop|z|s)=/.test(h || ''); }
+async function learnFromLink(h) {
+  const q = new URLSearchParams((h || '').replace(/^#/, ''));
+  $('loading').classList.add('show');
+  try {
+    let r;
+    if (q.has('pop')) r = await pop909Load(+q.get('pop'));
+    else {
+      const raw = q.has('z') ? await inflateRaw(b64urlToBytes(q.get('z'))) : b64urlToBytes(q.get('s'));
+      r = await learnLoadBytes(raw, q.get('n') || 'score', q.get('n') || '');
+    }
+    const ok = await learnEnter(r.id);
+    if (ok) { try { history.replaceState(null, '', h.startsWith('#') ? h : '#' + h); } catch (e) { } toast(`已打开《${r.name}》`); }
+    return ok;
+  } catch (e) { toast('链接打不开：' + e.message); console.error(e); return false; }
+  finally { $('loading').classList.remove('show'); }
+}
+async function learnMakeLink() {
+  if (!LM.id) return null;
+  const base = location.origin + location.pathname;
+  const ent = pieceList().find((p) => p.id === LM.id);
+  if (ent && ent.pop) return { url: `${base}#pop=${ent.pop}`, private: false };
+  const rec = await IDB.get('piece:' + LM.id); if (!rec) return null;
+  const u8 = rec.kind === 'xml' ? new TextEncoder().encode(rec.data) : rec.data;
+  const z = await deflateRawBytes(u8);
+  const nm = encodeURIComponent(rec.name || '');
+  return { url: z ? `${base}#z=${bytesToB64url(z)}&n=${nm}` : `${base}#s=${bytesToB64url(u8)}&n=${nm}`, private: true };
 }
 
 /* ---------------- POP909 曲库 ---------------- */
@@ -1153,6 +1199,7 @@ function learnUpdatePanel() {
   sel.innerHTML = list.length ? list.map((p) => `<option value="${p.id}">${escHtml(p.name)}（${p.bars} 小节）</option>`).join('') : '<option value="">（还没有曲子）</option>';
   if (LM.id) sel.value = LM.id;
   document.querySelectorAll('.lneed').forEach((n) => { n.hidden = !LM.active; });
+  if (!LM.active || LM._linkFor !== LM.id) { $('lLinkBox').hidden = true; $('lLinkNote').hidden = true; }
   $('lIntro').hidden = LM.active;
   if (!LM.active) return;
   const D = LM.data, n = LM.bars.length;
@@ -1208,6 +1255,14 @@ function learnInitUI() {
     learnUpdatePanel();
   };
   $('lExit').onclick = () => learnExit();
+  $('lLink').onclick = async () => {
+    const r = await learnMakeLink(); if (!r) return;
+    LM._linkFor = LM.id;
+    const box = $('lLinkBox'); box.hidden = false; box.value = r.url; box.select();
+    let copied = false; try { await navigator.clipboard.writeText(r.url); copied = true; } catch (e) { }
+    $('lLinkNote').hidden = false;
+    $('lLinkNote').textContent = (copied ? '链接已复制。' : '请长按上面的链接全选复制。') + (r.private ? '这条链接里含有整份谱子（没有上传到任何地方），只发给自己，不要转发。' : '这是曲库里的歌，链接里只有编号。') + '在 iPhone 上用 MIDIWeb Browser 打开这条链接，就会直接进入这首曲子。';
+  };
   const rangeChanged = () => {
     const D = LM.data, n = LM.bars.length;
     let a = clamp(parseInt($('lA').value, 10) || 1, 1, n), b = clamp(parseInt($('lB').value, 10) || a, 1, n);
@@ -1235,8 +1290,9 @@ function learnInitUI() {
 }
 // 速度：学曲子时单独记（不影响视奏练习的速度）
 function learnOnSpeed(v) { if (!LM.active || !LM.data) return; if (LM.data.method === 'ladder') LM.data.ladder.speed = v; else LM.data.speed = v; learnSave(); learnHudUpdate(); }
-async function learnRestore() {
+async function learnRestore(initHash) {
   learnUpdatePanel();
+  if (isSongLink(initHash) && (await learnFromLink(initHash))) return;
   if (lsGet('sr.mode', 'sight') !== 'learn') return;
   const id = lsGet('sr.lastPiece', null);
   if (id && pieceList().some((p) => p.id === id)) await learnEnter(id);

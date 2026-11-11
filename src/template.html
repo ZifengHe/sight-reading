@@ -48,6 +48,7 @@ button,label,#top,#kbd{-webkit-user-select:none;user-select:none}
 .lnote ul{margin:2px 0 6px;padding-left:18px}
 .lnote .muted{color:#9aa0ab}
 .lbreak{flex-basis:100%;height:0}
+#lLinkBox{flex-basis:100%;font-size:11px;background:#1c1f26;color:#cfd6e6;border:1px solid #3c414c;border-radius:6px;padding:6px;word-break:break-all;resize:none}
 #lSearch{flex-basis:260px;background:var(--bar2);color:var(--barTxt);border:1px solid #3c414c;border-radius:8px;padding:6px 10px}
 .lpop{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px}
 #top .lpop button{padding:5px 10px;font-size:13px}
@@ -215,6 +216,9 @@ body.nomidi .midi{display:none!important}
       <button id="lOpen">打开</button>
       <button id="lDel">🗑 删除</button>
       <button id="lExit" class="lneed">↩ 回到视奏练习</button>
+      <button id="lLink" class="lneed">🔗 这首曲子的链接</button>
+      <textarea id="lLinkBox" hidden readonly rows="2"></textarea>
+      <div id="lLinkNote" class="lnote" hidden></div>
       <span class="lbreak lneed"></span>
       <label class="lneed">范围 第 <input id="lA" type="number" min="1" inputmode="numeric"> – <input id="lB" type="number" min="1" inputmode="numeric"> 小节 <small id="lTotal"></small></label>
       <button id="lAll" class="lneed">整首</button>
@@ -283,6 +287,7 @@ body.nomidi .midi{display:none!important}
     <li><b>从后往前</b>：先练范围的最后一两小节，过关后自动往前加一段，越往后越熟，每次都完整弹到结尾。</li>
     <li><b>判断“弹对”</b>：连上 MIDI 键盘时自动判断（没有漏音、错音不超过 1 个）；没有 MIDI 时，自己觉得弹对了就点“✓ 这遍弹对了”。</li>
     <li><b>易错小节</b>：每遍的对错按小节累计，越常错的小节底色越红，下次先练那几小节。“我弹”选右手或左手就是分手练习，另一只手由电脑弹。</li>
+    <li><b>每首曲子一个链接</b>：打开一首曲子后点“🔗 这首曲子的链接”，把链接发给自己（微信、iMessage 都行），在 iPhone 上用 MIDIWeb Browser 打开就直接进入这首曲子，不用再传文件。曲库里的歌链接很短；自己的曲谱整份压缩在链接里（不上传到任何地方），链接较长，只发给自己。</li>
     <li>有反复记号的曲子会按演奏顺序展开，小节号按展开后的顺序编。D.C.、D.S. 不展开。</li>
   </ul>
   <h3>快捷键</h3>

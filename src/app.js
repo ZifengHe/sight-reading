@@ -1897,6 +1897,7 @@ async function rerender() {
 }
 
 async function main() {
+  const initHash = location.hash;   // 每首曲子的链接（#pop=… / #z=…），在生成乐谱改写网址之前先记下
   cursor.el = $('cursor'); cursor.badge = $('cbadge');
   // MIDI 状态：设置面板里始终显示一行，方便在 iPhone 等设备上确认浏览器到底有没有提供 Web MIDI
   const coarse = window.matchMedia && matchMedia('(pointer:coarse)').matches;
@@ -1932,9 +1933,10 @@ async function main() {
   const seed = Number.isFinite(h) && h > 0 ? h : Math.floor(Math.random() * 900000) + 100000;
   let lvl = 0; try { lvl = clamp(parseInt(localStorage.getItem('sr.lastLevel') || '0', 10) || 0, 0, LEVELS.length - 1); } catch (e) { }
   await regenerate(seed, lvl);
-  await learnRestore();
+  await learnRestore(initHash);
   requestAnimationFrame(frame);
-  try { if (!localStorage.getItem('sr.seenHelp')) { $('help').classList.add('show'); localStorage.setItem('sr.seenHelp', '1'); } } catch (e) { }
+  // 通过歌曲链接打开时直接看谱，不弹使用说明
+  try { if (!localStorage.getItem('sr.seenHelp') && !isSongLink(initHash)) { $('help').classList.add('show'); localStorage.setItem('sr.seenHelp', '1'); } } catch (e) { }
 }
 window.__SR = { unrollOrder, pop909ToPiece, pop909clToPiece, pop909Load, get POP909() { return POP909; }, get LM() { return LM; }, get SCL() { return SC.L; }, learnPages, parseMusicXML, parseMidi, midiToPiece, unzipMusicXML, inflateJS, learnEnter, learnExit, buildTimeline, renderAll, ensureRendered, AU, MIDI, onNoteOn, FOL, SC, posT0, setSpeed, S, P, genExercise, validatePiece, LEVELS, EX_PER_LEVEL, generateAll, seek, startPlay, stopPlay, buildBarVF, modsWidth };
 window.addEventListener('DOMContentLoaded', main);
