@@ -6,7 +6,7 @@ src = root / 'src'
 tpl = (src / 'template.html').read_text(encoding='utf-8')
 vex = (src / 'vendor' / 'vexflow-4.2.2.js').read_text(encoding='utf-8')
 samples = json.loads((src / 'vendor' / 'piano_samples.json').read_text())
-app = (src / 'app.js').read_text(encoding='utf-8')
+app = (src / 'app.js').read_text(encoding='utf-8') + '\n' + (src / 'pop909.js').read_text(encoding='utf-8') + '\n' + (src / 'learn.js').read_text(encoding='utf-8')
 
 def make_icon():
     # 主屏幕图标：深色底 + 两个用符杠连起来的八分音符

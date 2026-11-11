@@ -39,6 +39,23 @@ button,label,#top,#kbd{-webkit-user-select:none;user-select:none}
 #settings{position:absolute;left:0;right:0;top:100%;border-top:1px solid #3a3f49;background:#262a32;box-shadow:0 8px 20px rgba(0,0,0,.3)}
 #settings .row{font-size:13px}
 #settings input[type=range]{width:90px;accent-color:var(--accent)}
+#learnPanel{position:absolute;left:0;right:0;top:100%;border-top:1px solid #3a3f49;background:#262a32;box-shadow:0 8px 20px rgba(0,0,0,.3);max-height:calc(100vh - 60px);overflow-y:auto}
+#learnPanel .row{font-size:13px}
+#learnPanel [hidden]{display:none!important}
+#learnPanel input[type=number]{width:58px;background:var(--bar2);color:var(--barTxt);border:1px solid #3c414c;border-radius:6px;padding:4px 6px}
+#top .lbtn{background:var(--accent);color:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;font-weight:600}
+.lnote{flex-basis:100%;color:#cfd6e6;font-size:12.5px;line-height:1.55;white-space:normal}
+.lnote ul{margin:2px 0 6px;padding-left:18px}
+.lnote .muted{color:#9aa0ab}
+.lbreak{flex-basis:100%;height:0}
+#lSearch{flex-basis:260px;background:var(--bar2);color:var(--barTxt);border:1px solid #3c414c;border-radius:8px;padding:6px 10px}
+.lpop{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px}
+#top .lpop button{padding:5px 10px;font-size:13px}
+.lpop small{color:#9aa0ab}
+.lov{position:absolute;top:0;bottom:0;pointer-events:none;mix-blend-mode:multiply;border-radius:3px}
+.learning #lLevelBox,.learning #bNew{display:none!important}
+.lpicking .system{cursor:crosshair}
+.lpicking #wrap{box-shadow:inset 0 0 0 3px rgba(224,122,31,.6)}
 #seedTxt{color:#9aa0ab}
 #midiDiag{color:#9aa0ab;font-size:12px;flex-basis:100%;word-break:break-all}
 .brand{font-weight:700;letter-spacing:.5px;color:#fff;margin-right:4px}
@@ -124,6 +141,10 @@ body.nomidi .midi{display:none!important}
   #bHelp{grid-column:span 2}
   #settings{position:fixed;left:calc(66px + env(safe-area-inset-left));top:0;bottom:0;right:auto;width:min(480px,72vw);overflow-y:auto;border-top:none;border-left:1px solid #3a3f49}
   #settings .row{flex-direction:column;align-items:flex-start;gap:10px;font-size:14px}
+  #learnPanel{position:fixed;left:calc(66px + env(safe-area-inset-left));top:0;bottom:0;right:auto;width:min(520px,78vw);max-height:none;overflow-y:auto;border-top:none;border-left:1px solid #3a3f49}
+  #learnPanel .row{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:10px 8px;font-size:14px;padding:10px}
+  #learnPanel label{display:flex;flex-wrap:wrap}
+  #bLearn{grid-column:span 2}
   .ex-head{padding:3px 2px 0}
   .ex-no{font-size:13px}
   .tag{font-size:11px;padding:0 6px}
@@ -158,11 +179,12 @@ body.nomidi .midi{display:none!important}
     <button id="bPlay">▶ 播放</button>
     <button id="bPrev" title="上一首（←）">⏮</button>
     <button id="bNext" title="下一首（→）">⏭</button>
-    <label><span class="long">级别</span> <select id="selLevel"></select></label>
+    <label id="lLevelBox"><span class="long">级别</span> <select id="selLevel"></select></label>
     <label class="spdbox"><span class="long">速度</span> <button id="spdDn" class="short" title="减慢">−</button><input id="spd" type="range" min="30" max="150" step="5" value="100"><button id="spdUp" class="short" title="加快">＋</button><span id="spdTxt">100%</span></label>
     <label id="lMetro"><input type="checkbox" id="cMetro"> <span class="long">节拍器</span><span class="short">拍</span></label>
     <button id="bSet">⚙<span class="long"> 设置</span></button>
     <button id="bHelp">?<span class="long"> 说明</span></button>
+    <button id="bLearn">📖<span class="long"> 学曲子</span></button>
     <div id="midiHud"></div>
     <div id="status"></div>
   </div>
@@ -183,6 +205,35 @@ body.nomidi .midi{display:none!important}
       <label>谱面大小 <input type="range" id="zoom" min="50" max="100" step="5" value="100"></label>
       <button id="bNew">🎲 换一套新谱</button>
       <span id="seedTxt"></span>
+    </div>
+  </div>
+  <div id="learnPanel" hidden>
+    <div class="row">
+      <div id="lIntro" class="lnote"><b>学曲子</b>：载入你自己的曲谱文件（MusicXML、.mxl 或 MIDI），选几小节反复练，用“速度阶梯”或“从后往前”一步步过关。连上 MIDI 键盘会自动判断每遍弹得对不对，并标出最容易错的小节。曲谱只保存在这台设备上。</div>
+      <label class="lbtn">📂 载入曲谱文件<input type="file" id="lFile" hidden></label>
+      <label>我的曲子 <select id="lPiece"></select></label>
+      <button id="lOpen">打开</button>
+      <button id="lDel">🗑 删除</button>
+      <button id="lExit" class="lneed">↩ 回到视奏练习</button>
+      <span class="lbreak lneed"></span>
+      <label class="lneed">范围 第 <input id="lA" type="number" min="1" inputmode="numeric"> – <input id="lB" type="number" min="1" inputmode="numeric"> 小节 <small id="lTotal"></small></label>
+      <button id="lAll" class="lneed">整首</button>
+      <button id="lPick" class="lneed">👆 在谱上点选范围</button>
+      <span class="lbreak lneed"></span>
+      <label class="lneed">练法 <select id="lMethod"><option value="free">自由循环</option><option value="ladder">速度阶梯</option><option value="back">从后往前</option></select></label>
+      <label id="lLadderOpts" class="lneed">起始速度 <select id="lStart"><option>40</option><option>45</option><option>50</option><option>55</option><option>60</option><option>65</option><option>70</option><option>75</option><option>80</option><option>85</option><option>90</option></select>% 每次加 <select id="lStep"><option>5</option><option>10</option></select>%</label>
+      <label id="lBackOpts" class="lneed">每次往前加 <select id="lChunk"><option>1</option><option>2</option><option>4</option></select> 小节</label>
+      <label class="lneed">过关：连续弹对 <select id="lNeed"><option>2</option><option>3</option><option>5</option></select> 遍</label>
+      <label class="lneed"><input type="checkbox" id="lLoop" checked> 循环播放</label>
+      <label class="lneed"><input type="checkbox" id="lHeat" checked> 标出易错小节</label>
+      <button id="lOk" class="lneed">✓ 这遍弹对了</button>
+      <div id="lStatus" class="lnote lneed"></div>
+      <div id="lLog" class="lnote lneed"></div>
+      <button id="lClear" class="lneed">清除这首的记录</button>
+      <span class="lbreak"></span>
+      <div class="lnote"><b>🎵 POP909 曲库</b>：909 首华语流行歌的钢琴编配（右手旋律、左手伴奏），点歌名就载入。谱面来自 POP909-CL（校正过小节线和调号，MIT 许可），速度取自原版 POP909 数据集（music-x-lab，MIT 许可）；点歌时从它们的 GitHub 下载，需要能上网。</div>
+      <input id="lSearch" type="search" placeholder="搜歌名或歌手，例如 邓丽君" autocomplete="off">
+      <div id="lPop" class="lpop"></div>
     </div>
   </div>
 </header>
@@ -223,6 +274,16 @@ body.nomidi .midi{display:none!important}
     <li>第一次要<b>点“播放”</b>才会出声（iOS 规定声音必须由手指触发）。iOS 16.4 以上静音开关打开也能出声；如果还是没声音，拨开静音开关、调高媒体音量。</li>
     <li>手机屏幕较矮，屏幕键盘默认关闭，可在“设置”里打开；高级别里特别密的曲子在手机上会自动变成 4–6 小节，保证音符看得清。</li>
     <li>iPhone / iPad 上的 Safari、Chrome 等浏览器都不支持 MIDI。想在 iPhone / iPad 上用“弹对变绿”和等待模式，可以试试用 MIDIWeb Browser 这类支持 Web MIDI 的 App 打开本页网址；电脑上的 Chrome / Edge 可以直接用。</li>
+  </ul>
+  <h3>学曲子（📖 按钮）</h3>
+  <ul>
+    <li><b>载入曲谱</b>：点“📖 学曲子 → 📂 载入曲谱文件”，选 MusicXML（.musicxml / .xml / .mxl）或 MIDI（.mid）文件。MuseScore 等打谱软件都能导出 MusicXML。曲谱只存在这台设备上。</li>
+    <li><b>选范围</b>：输入起止小节，或点“👆 在谱上点选范围”后在谱上点两下。范围会循环播放，每遍之间有一小节预备拍。</li>
+    <li><b>速度阶梯</b>：从较慢的速度开始（例如 60%），连续弹对几遍（默认 3 遍）就自动加快 5%，一直到原速。</li>
+    <li><b>从后往前</b>：先练范围的最后一两小节，过关后自动往前加一段，越往后越熟，每次都完整弹到结尾。</li>
+    <li><b>判断“弹对”</b>：连上 MIDI 键盘时自动判断（没有漏音、错音不超过 1 个）；没有 MIDI 时，自己觉得弹对了就点“✓ 这遍弹对了”。</li>
+    <li><b>易错小节</b>：每遍的对错按小节累计，越常错的小节底色越红，下次先练那几小节。“我弹”选右手或左手就是分手练习，另一只手由电脑弹。</li>
+    <li>有反复记号的曲子会按演奏顺序展开，小节号按展开后的顺序编。D.C.、D.S. 不展开。</li>
   </ul>
   <h3>快捷键</h3>
   <p><kbd>空格</kbd> 播放/暂停　<kbd>←</kbd><kbd>→</kbd>（或 <kbd>PgUp</kbd><kbd>PgDn</kbd>）上一首/下一首　<kbd>↑</kbd><kbd>↓</kbd> 速度　<kbd>M</kbd> 节拍器　<kbd>L</kbd> 循环</p>
@@ -1111,7 +1172,8 @@ function buildTimeline() {
   S.exs.forEach((ex) => {
     const ts = ex.ts, k = spt(ex);
     ex.countInStart = T;
-    for (let c = 0; c < (S.settings.countIn || 1); c++) {
+    // 学曲子模式的分页是同一首曲子，页与页之间不插预备拍（预备拍在开始播放时临时加）
+    if (!ex.noCountIn) for (let c = 0; c < (S.settings.countIn || 1); c++) {
       for (let b = 0; b < ts.len; b += ts.beat) ev.push({ t0: T + b * k, kind: 'click', strong: b === 0, countIn: true, ex: ex.gi });
       T += ts.len * k;
     }
@@ -1119,16 +1181,18 @@ function buildTimeline() {
     ex.bars.forEach((bar, bi) => {
       bar.t0 = T; bar.t1 = T + bar.len * k; bar.ex = ex.gi; bar.bi = bi;
       S.bars.push(bar);
-      for (let b = 0; b < ts.len; b += ts.beat) ev.push({ t0: T + b * k, kind: 'click', strong: b === 0, ex: ex.gi });
+      const bts = bar.ts || ts;
+      for (let b = 0; b < bar.len - 1e-6; b += bts.beat) ev.push({ t0: T + b * k, kind: 'click', strong: b === 0, ex: ex.gi });
       for (const h of ['rh', 'lh']) for (const e of bar[h]) {
         if (e.rest) continue;
         const melody = (bar.melHand || 'rh') === h || ex.tex !== 'both';
         const dynF = { p: 0.62, mp: 0.78, mf: 0.92, f: 1.08 };
         e.hand = h; e.t0 = T + e.pos * k; e.bar = bar;
         e.notes.forEach((n, ni) => {
+          if (n.tieStop) return;   // 连音线的后半：不重新发声（前半的时值已经延长）
           let vel = (melody ? 0.82 : 0.52) * (ni < e.notes.length - 1 && melody ? 0.8 : 1);
           if (e.art === 'a>') vel *= 1.22;
-          ev.push({ t0: e.t0, kind: 'note', midi: n.midi, dur0: e.dur * k * (e.art === 'a.' ? 0.42 : 0.96), vel, hand: h, e, ex: ex.gi });
+          ev.push({ t0: e.t0, kind: 'note', midi: n.midi, dur0: (n.tieDur || e.dur) * k * (e.art === 'a.' ? 0.42 : 0.96), vel, hand: h, e, ex: ex.gi });
         });
       }
       T = bar.t1;
@@ -1155,7 +1219,7 @@ function buildTimeline() {
   const ons = [];
   S.exs.forEach((ex) => ex.bars.forEach((bar) => {
     const map = new Map();
-    for (const h of ['rh', 'lh']) for (const e of bar[h]) { if (e.rest) continue; if (!map.has(e.pos)) map.set(e.pos, []); map.get(e.pos).push(e); }
+    for (const h of ['rh', 'lh']) for (const e of bar[h]) { if (e.rest || e.notes.every((n) => n.tieStop)) continue; if (!map.has(e.pos)) map.set(e.pos, []); map.get(e.pos).push(e); }
     [...map.keys()].sort((a, b) => a - b).forEach((pos) => ons.push({ t0: bar.t0 + pos * spt(ex), ex: ex.gi, bar, pos, evs: map.get(pos) }));
   }));
   S.ons = ons;
@@ -1166,30 +1230,69 @@ const ACC = { '-2': 'bb', '-1': 'b', '0': 'n', '1': '#', '2': '##' };
 const DUR = { 96: 'w', 72: 'hd', 48: 'h', 36: 'qd', 24: 'q', 18: '8d', 12: '8', 6: '16', 8: '8' };
 function keyStr(d) { return LETTERS[mod(d, 7)] + '/' + Math.floor(d / 7); }
 
+// 空档（某个声部中间没有音的地方）用看不见的 GhostNote 占位，保证同一小节里各声部对齐
+const GAP_VALS = [[96, 'w'], [48, 'h'], [24, 'q'], [12, '8'], [6, '16'], [3, '32'], [1.5, '64']];
+function gapNotes(ticks) {
+  const out = []; let r = ticks;
+  for (const [v, c] of GAP_VALS) while (r >= v - 1e-6) { out.push(new VF.GhostNote({ duration: c })); r -= v; }
+  return out;
+}
+// 休止符的纵向位置：单声部在中间，多声部时上声部靠上、下声部靠下
+const REST_KEY = { treble: ['b/4', 'e/5', 'f/4'], bass: ['d/3', 'g/3', 'a/2'] };
 function buildBarVF(ex, bar) {
-  const ts = ex.ts;
+  const ts = bar.ts || ex.ts;
+  const ksig = (bar.key || ex.key).sig;
   const mk = (evs, clef, hand) => {
-    const acc = {}; const notes = []; const tg = {};
-    for (const e of evs) {
-      let sn;
-      const code = DUR[e.dur];
-      if (e.rest) {
-        const full = e.full;
-        sn = new VF.StaveNote({ clef, keys: [clef === 'treble' ? 'b/4' : 'd/3'], duration: (full ? 'w' : code) + 'r', align_center: !!full });
-        if (!full && code.endsWith('d')) VF.Dot.buildAndAttach([sn], { all: true });
-      } else {
-        sn = new VF.StaveNote({ clef, keys: e.notes.map((n) => keyStr(n.d)), duration: code, auto_stem: true });
-        e.notes.forEach((n, i) => {
-          const cur = (n.d in acc) ? acc[n.d] : ex.key.sig[mod(n.d, 7)];
-          if (n.a !== cur) { sn.addModifier(new VF.Accidental(ACC[n.a]), i); acc[n.d] = n.a; }
-        });
-        if (code.endsWith('d')) VF.Dot.buildAndAttach([sn], { all: true });
+    const notes = []; const tg = {}; const voices = []; const beams = []; const tuplets = [];
+    const byV = new Map();
+    for (const e of evs) { const v = e.v || 0; if (!byV.has(v)) byV.set(v, []); byV.get(v).push(e); }
+    const vids = [...byV.keys()].sort((a, b) => a - b);
+    const multi = vids.length > 1;
+    const acc = {};
+    vids.forEach((vid, vi) => {
+      const list = byV.get(vid).slice().sort((a, b) => a.pos - b.pos);
+      const tick = []; let pos = 0;
+      for (const e of list) {
+        if (e.pos > pos + 1e-6) tick.push(...gapNotes(e.pos - pos));
+        let sn;
+        const code0 = e.code || DUR[e.dur];
+        const base = code0.replace(/d+$/, '');
+        const dots = e.dots ?? (code0.length - base.length);
+        const dstr = base + 'd'.repeat(dots);
+        const rk = REST_KEY[clef] || REST_KEY.treble;
+        if (e.rest) {
+          const full = e.full && list.length === 1;
+          sn = new VF.StaveNote({ clef, keys: [e.restKey || rk[multi ? (vi === 0 ? 1 : 2) : 0]], duration: (full ? 'w' : dstr) + 'r', align_center: !!full });
+          if (!full) for (let k = 0; k < dots; k++) VF.Dot.buildAndAttach([sn], { all: true });
+        } else {
+          const opt = { clef, keys: e.notes.map((n) => keyStr(n.d)), duration: dstr };
+          if (multi) opt.stem_direction = vi === 0 ? 1 : -1; else opt.auto_stem = true;
+          sn = new VF.StaveNote(opt);
+          e.notes.forEach((n, i) => {
+            if (n.acc !== undefined) { if (n.acc) sn.addModifier(new VF.Accidental(n.acc), i); return; }   // 导入的曲谱：照原谱标的临时记号
+            const cur = (n.d in acc) ? acc[n.d] : ksig[mod(n.d, 7)];
+            if (n.a !== cur) { sn.addModifier(new VF.Accidental(ACC[n.a]), i); acc[n.d] = n.a; }
+          });
+          for (let k = 0; k < dots; k++) VF.Dot.buildAndAttach([sn], { all: true });
+        }
+        e.sn = sn; notes.push(sn); tick.push(sn);
+        if (e.tup) { const key = vi + ':' + e.tup; (tg[key] = tg[key] || []).push(e); }
+        pos = Math.max(pos, e.pos + e.dur);
       }
-      e.sn = sn; notes.push(sn);
-      if (e.tup) (tg[e.tup] = tg[e.tup] || []).push(sn);
-    }
-    const tuplets = Object.values(tg).filter((g) => g.length === 3).map((g) => new VF.Tuplet(g, { num_notes: 3, notes_occupied: 2, bracketed: false, ratioed: false }));
-    const beams = VF.Beam.generateBeams(notes, { groups: [ts.comp ? new VF.Fraction(3, 8) : new VF.Fraction(1, 4)] });
+      // 连音（三连音等）要在连符杠之前建：它会改变音符的时值，影响符杠分组
+      for (const [key, g] of Object.entries(tg)) {
+        if (!key.startsWith(vi + ':')) continue;
+        const t0 = g[0];
+        if (t0.tupN) tuplets.push(new VF.Tuplet(g.map((e) => e.sn), { num_notes: t0.tupN, notes_occupied: t0.tupM, ratioed: false }));
+        else if (g.length === 3) tuplets.push(new VF.Tuplet(g.map((e) => e.sn), { num_notes: 3, notes_occupied: 2, bracketed: false, ratioed: false }));
+      }
+      const voice = new VF.Voice({ num_beats: ts.n, beat_value: ts.d }).setMode(VF.Voice.Mode.SOFT).addTickables(tick);
+      voices.push(voice);
+      const vnotes = tick.filter((t) => t instanceof VF.StaveNote);
+      const opt = { groups: [ts.comp ? new VF.Fraction(3, 8) : new VF.Fraction(1, 4)] };
+      if (multi) opt.maintain_stem_directions = true;
+      try { beams.push(...VF.Beam.generateBeams(vnotes, opt)); } catch (er) { }
+    });
     // 修饰：跳音、重音、力度、指法（在符干方向确定后）
     for (const e of evs) {
       const sn = e.sn;
@@ -1199,13 +1302,12 @@ function buildBarVF(ex, bar) {
       if (e.dyn) sn.addModifier(dynAnno(e.dyn), 0);
       if (e.finger) sn.addModifier(new VF.FretHandFinger(e.finger).setPosition(hand === 'rh' ? VF.Modifier.Position.ABOVE : VF.Modifier.Position.BELOW), hand === 'rh' ? e.notes.length - 1 : 0);
     }
-    const voice = new VF.Voice({ num_beats: ts.n, beat_value: ts.d }).setMode(VF.Voice.Mode.SOFT).addTickables(notes);
-    return { voice, beams, tuplets, notes };
+    return { voices, beams, tuplets, notes };
   };
-  const T = mk(bar.rh, 'treble', 'rh'), B = mk(bar.lh, 'bass', 'lh');
+  const T = mk(bar.rh, (bar.clef && bar.clef.rh) || 'treble', 'rh'), B = mk(bar.lh, (bar.clef && bar.clef.lh) || 'bass', 'lh');
   const fmt = new VF.Formatter();
-  fmt.joinVoices([T.voice]); fmt.joinVoices([B.voice]);
-  const minW = fmt.preCalculateMinTotalWidth([T.voice, B.voice]);
+  fmt.joinVoices(T.voices); fmt.joinVoices(B.voices);
+  const minW = fmt.preCalculateMinTotalWidth([...T.voices, ...B.voices]);
   bar.vf = { T, B, fmt, minW };
 }
 function dynAnno(t) {
@@ -1234,17 +1336,20 @@ function renderAll(progressCb) {
   S.lay = { cw, pageH, nLines };
   S.rendered = new Set();
   if (S.io) S.io.disconnect();
-  LEVELS.forEach((L, li) => {
-    for (let ei = 0; ei < EX_PER_LEVEL; ei++) {
-      const ex = S.exs[S.levelStart[li] + ei];
-      const div = document.createElement('section'); div.className = 'ex'; div.id = 'ex' + ex.gi;
-      const tm = ex.ts.comp ? `♩. = ${Math.round(ex.bpm / 1.5)}` : `♩ = ${ex.bpm}`;
+  S.exs.forEach((ex) => {
+    const div = document.createElement('section'); div.className = 'ex'; div.id = 'ex' + ex.gi;
+    const tm = ex.ts.comp ? `♩. = ${Math.round(ex.bpm / 1.5)}` : `♩ = ${ex.bpm}`;
+    if (ex.learn) {
+      const tags = (ex.pageIdx === 0 ? [ex.key.cn, ex.ts.name, tm] : []).map((t) => `<span class="tag">${t}</span>`).join('');
+      div.innerHTML = `<div class="ex-head"><div class="ex-line"><span class="ex-no"><span class="lv">${escHtml(ex.title)}</span> 第 ${ex.barFrom}–${ex.barTo} 小节<small>/${ex.nBarsTotal}</small></span>${tags}<span class="ex-score" id="sc${ex.gi}"></span></div></div><div class="ex-body"></div>`;
+    } else {
+      const li = ex.li, ei = ex.ei, L = LEVELS[li];
       const tags = [ex.key.cn, ex.ts.name, tm, ex.texName, ex.swapped ? '左手旋律' : ''].filter(Boolean).map((t) => `<span class="tag">${t}</span>`).join('');
       const lvName = li === 0 ? '入门' : L.name;
       const banner = ei === 0 ? `<div class="lvl-banner"><b>${lvName}</b><span class="en">${L.en}</span><span>${L.desc}</span></div>` : '';
       div.innerHTML = `<div class="ex-head">${banner}<div class="ex-line"><span class="ex-no"><span class="lv">${lvName}</span> 练习 ${ei + 1}<small>/${EX_PER_LEVEL}</small></span>${ex.title ? `<span class="ex-title">${ex.title}</span>` : ''}${tags}<span class="ex-score" id="sc${ex.gi}"></span></div></div><div class="ex-body"></div>`;
-      score.appendChild(div);
     }
+    score.appendChild(div);
   });
   // 一共几百首，全部画出来手机吃不消：只画当前页附近的，滑到哪里画到哪里
   S.io = new IntersectionObserver((ents) => {
@@ -1291,8 +1396,10 @@ function lineGeom(ex, ln) {
   let rhMax = 38, rhMin = 30, lhMax = 26, lhMin = 18, dyn = false;
   ln.forEach((i) => {
     const b = ex.bars[i];
-    b.rh.forEach((e) => { if (e.dyn) dyn = true; e.notes.forEach((n) => { rhMax = Math.max(rhMax, n.d); rhMin = Math.min(rhMin, n.d); }); });
-    b.lh.forEach((e) => e.notes.forEach((n) => { lhMax = Math.max(lhMax, n.d); lhMin = Math.min(lhMin, n.d); }));
+    // 上谱表用低音谱号、下谱表用高音谱号时，音在谱表上的位置差 12 个音级
+    const offR = b.clef && b.clef.rh === 'bass' ? 12 : 0, offL = b.clef && b.clef.lh === 'treble' ? -12 : 0;
+    b.rh.forEach((e) => { if (e.dyn) dyn = true; e.notes.forEach((n) => { rhMax = Math.max(rhMax, n.d + offR); rhMin = Math.min(rhMin, n.d + offR); }); });
+    b.lh.forEach((e) => e.notes.forEach((n) => { lhMax = Math.max(lhMax, n.d + offL); lhMin = Math.min(lhMin, n.d + offL); }));
   });
   // VexFlow 的第一线在 y+40；按实际音域留出上下空间
   const above = Math.max(22, (rhMax - 38) * 5 + 20);
@@ -1337,11 +1444,22 @@ function renderExercise(ex, div, cw, pageH, nLines, li) {
       const bar = ex.bars[i];
       const w = widths[i] * scale + (k === 0 ? mods : 0);
       const top = new VF.Stave(x, trebleY, w), bot = new VF.Stave(x, bassY, w);
+      const prev = ex.bars[i - 1] || ex.prevBar;
+      const clefOf = (b, h) => (b && b.clef && b.clef[h]) || (h === 'rh' ? 'treble' : 'bass');
+      const keyOf = (b) => ((b && b.key) || ex.key).name, tsOf = (b) => ((b && b.ts) || ex.ts).name;
       if (k === 0) {
-        top.addClef('treble').addKeySignature(ex.key.name); bot.addClef('bass').addKeySignature(ex.key.name);
-        if (first) { top.addTimeSignature(ex.ts.name); bot.addTimeSignature(ex.ts.name); }
-        if (!first) top.setMeasure(i + 1);
-      } else { top.setBegBarType(VF.Barline.type.NONE); bot.setBegBarType(VF.Barline.type.NONE); }
+        top.addClef(clefOf(bar, 'rh')).addKeySignature(keyOf(bar)); bot.addClef(clefOf(bar, 'lh')).addKeySignature(keyOf(bar));
+        const showTs = ex.learn ? (first && ex.showTs) || (prev && tsOf(prev) !== tsOf(bar)) : first;
+        if (showTs) { top.addTimeSignature(tsOf(bar)); bot.addTimeSignature(tsOf(bar)); }
+        if (!first || ex.learn) top.setMeasure(bar.num || i + 1);
+      } else {
+        top.setBegBarType(VF.Barline.type.NONE); bot.setBegBarType(VF.Barline.type.NONE);
+        // 行中间换谱号、调号、拍号（只有导入的曲谱会出现）
+        if (clefOf(prev, 'rh') !== clefOf(bar, 'rh')) top.addClef(clefOf(bar, 'rh'), 'small');
+        if (clefOf(prev, 'lh') !== clefOf(bar, 'lh')) bot.addClef(clefOf(bar, 'lh'), 'small');
+        if (keyOf(prev) !== keyOf(bar)) { top.addKeySignature(keyOf(bar), keyOf(prev)); bot.addKeySignature(keyOf(bar), keyOf(prev)); }
+        if (tsOf(prev) !== tsOf(bar)) { top.addTimeSignature(tsOf(bar)); bot.addTimeSignature(tsOf(bar)); }
+      }
       const isEnd = i === ex.bars.length - 1;
       if (isEnd) { top.setEndBarType(VF.Barline.type.END); bot.setEndBarType(VF.Barline.type.END); }
       top.setContext(ctx); bot.setContext(ctx);
@@ -1356,8 +1474,8 @@ function renderExercise(ex, div, cw, pageH, nLines, li) {
       const { T, B, fmt } = bar.vf;
       T.notes.forEach((n) => n.setStave(top)); B.notes.forEach((n) => n.setStave(bot));
       const noteW = top.getNoteEndX() - sx - 14;
-      fmt.format([T.voice, B.voice], Math.max(30, noteW));
-      T.voice.draw(ctx, top); B.voice.draw(ctx, bot);
+      fmt.format([...T.voices, ...B.voices], Math.max(30, noteW));
+      T.voices.forEach((v) => v.draw(ctx, top)); B.voices.forEach((v) => v.draw(ctx, bot));
       [...T.beams, ...B.beams].forEach((b) => b.setContext(ctx).draw());
       [...T.tuplets, ...B.tuplets].forEach((t) => t.setContext(ctx).draw());
       // 光标锚点：每个起音位置的 x
@@ -1376,10 +1494,29 @@ function renderExercise(ex, div, cw, pageH, nLines, li) {
       x += w;
       bar.vf = null; // 释放
     });
+    drawTies(ex, ln, ctx);
     sysObj.idx = S.systems.length;
     S.systems.push(sysObj);
   });
   ex.zoom = zoom;
+  if (ex.learn) learnAfterRender(ex);
+}
+// 连音线：同一行内画完整的；跨行、跨页的两头各画半条
+function drawTies(ex, ln, ctx) {
+  const inLine = new Set(ln.map((i) => ex.bars[i]));
+  for (const i of ln) for (const h of ['rh', 'lh']) for (const e of ex.bars[i][h]) {
+    if (e.rest || !e.sn) continue;
+    e.notes.forEach((n, ni) => {
+      try {
+        if (n.tieTo) {
+          const t = n.tieTo;
+          if (inLine.has(t.e.bar) && t.e.sn) new VF.StaveTie({ first_note: e.sn, last_note: t.e.sn, first_indices: [ni], last_indices: [t.i] }).setContext(ctx).draw();
+          else new VF.StaveTie({ first_note: e.sn, last_note: null, first_indices: [ni], last_indices: [ni] }).setContext(ctx).draw();
+        }
+        if (n.tieFrom && !inLine.has(n.tieFrom.e.bar)) new VF.StaveTie({ first_note: null, last_note: e.sn, first_indices: [ni], last_indices: [ni] }).setContext(ctx).draw();
+      } catch (er) { }
+    });
+  }
 }
 function computeSystemGeometry(ex) {
   S.systems.forEach((s) => {
@@ -1490,6 +1627,7 @@ function practiceHand(h) { return S.settings.hand === 'both' || S.settings.hand 
 
 async function startPlay() {
   await AU.init();
+  if (LM.active) return learnStartPlay();
   const { ex: exI, bar: bI } = S.cur;
   const ex = S.exs[exI];
   P.curEx = exI; P.visEx = exI; P.stopAt = null; P.vq = []; clearHighlights();
@@ -1532,7 +1670,9 @@ function schedule() {
   while (P.nextIdx < S.ev.length) {
     const e = S.ev[P.nextIdx];
     const ex = S.exs[P.curEx];
+    if (LM.active && e.t0 >= LM.endT0 - 1e-6) { if (learnWrap()) continue; return; }
     if (e.t0 >= ex.endT0 - 1e-6) {
+      if (LM.active) { P.curEx = Math.min(P.curEx + 1, S.exs.length - 1); continue; }
       if (S.settings.loop) {
         const at = ctxTimeOf(ex.endT0);
         P.anchors.push({ ctx: at, t0: ex.startT0, f: P.anchors[P.anchors.length - 1].f });
@@ -1556,11 +1696,14 @@ function schedule() {
     }
     P.nextIdx++;
   }
+  if (LM.active && P.nextIdx >= S.ev.length && ctxTimeOf(LM.endT0) <= horizon) learnWrap();
 }
 function setSpeed(v) {
   S.settings.speed = v; saveSettings();
-  if (P.playing && P.mode === 'play') { const now = AU.ctx.currentTime; P.anchors.push({ ctx: now, t0: posT0(now), f: factor() }); P.anchors = P.anchors.filter((a, i, arr) => i >= arr.length - 3); }
+  // 已经排好“下一遍从头开始”的时间点时不插新锚点（新速度从下一遍生效）
+  if (P.playing && P.mode === 'play') { const now = AU.ctx.currentTime; if (!P.anchors.some((a) => a.ctx > now)) { P.anchors.push({ ctx: now, t0: posT0(now), f: factor() }); P.anchors = P.anchors.filter((a, i, arr) => i >= arr.length - 3); } }
   updateSpeedLabel();
+  learnOnSpeed(v);
 }
 function locateBar(t) {
   const b = barAtT0(t);
@@ -1651,6 +1794,7 @@ function frame() {
     if (P.mode === 'play') {
       while (P.anchors.length > 1 && P.anchors[1].ctx <= now) P.anchors.shift();
       if (P.pendingReset && now >= P.pendingReset.at) { showScore(P.pendingReset.ex); resetScore(P.pendingReset.ex); P.pendingReset = null; }
+      if (P.pendingPass && now >= P.pendingPass.at) { const pp = P.pendingPass; P.pendingPass = null; if (P.pendingCountIn) { P.countIn = P.pendingCountIn; P.pendingCountIn = null; } learnPassEnd(pp); if (!P.playing) return requestAnimationFrame(frame); }
       const t = posT0(now);
       if (P.countIn && t >= P.countIn.to) P.countIn = null;
       // 开始后的头 0.12 秒 t 还在起点之前，会落到上一首的最后一小节，这里按起点算
@@ -1669,14 +1813,17 @@ function frame() {
           cursor.badge.style.display = 'block';
         } else cursor.badge.style.display = 'none';
         if (lastStatusBar !== bar) { lastStatusBar = bar; updateStatus(bar); }
-        if (bar.ex !== P.visEx) { showScore(P.visEx); P.visEx = bar.ex; resetScore(bar.ex); }
+        if (bar.ex !== P.visEx) { if (LM.active) P.visEx = bar.ex; else { showScore(P.visEx); P.visEx = bar.ex; resetScore(bar.ex); } }
         sweepMisses(t);
       }
       if (P.stopAt !== null && now >= P.stopAt) {
         const lastEx = S.exs[P.curEx];
         stopPlay(false);
-        S.cur = { ex: Math.min(P.curEx + (S.settings.cont ? 0 : 1), S.exs.length - 1), bar: 0 };
-        if (lastEx) showScore(lastEx.gi);
+        if (LM.active) S.cur = learnRangeStartCur();
+        else {
+          S.cur = { ex: Math.min(P.curEx + (S.settings.cont ? 0 : 1), S.exs.length - 1), bar: 0 };
+          if (lastEx) showScore(lastEx.gi);
+        }
         placeIdleCursor();
       }
     } else if (P.mode === 'follow') followFrame(dt);
@@ -1688,6 +1835,7 @@ function frame() {
 const MIDI = { connected: false, access: null, held: new Set() };
 const SC = {}; // 每首练习的分数
 function resetScore(gi, fromT0 = -1) {
+  if (LM.active) return learnResetScore(fromT0);
   SC[gi] = { hit: 0, miss: 0, wrong: 0, exp: [], idx: 0 };
   const ex = S.exs[gi];
   ex.bars.forEach((b) => ['rh', 'lh'].forEach((h) => b[h].forEach((e) => { if (e.el) e.el.classList.remove('hit', 'miss', 'expect'); e.hitN = 0; })));
@@ -1696,13 +1844,17 @@ function resetScore(gi, fromT0 = -1) {
   const el = document.getElementById('sc' + gi); if (el) el.textContent = '';
   hud();
 }
+// 当前用哪一份分数：学曲子模式按“一遍”统计（跨页），视奏练习按每首统计
+function scKey() { return LM.active ? 'L' : (P.mode === 'follow' ? P.curEx : P.visEx); }
+function barStat(sc, bar) { if (!sc.bars || !bar) return null; const k = bar.gidx ?? bar.bi; return (sc.bars[k] = sc.bars[k] || { exp: 0, hit: 0, wrong: 0 }); }
 function sweepMisses(t) {
   if (!MIDI.connected) return;
-  const sc = SC[P.visEx]; if (!sc) return;
+  const sc = SC[scKey()]; if (!sc) return;
   const W = 0.25 * factor();
   while (sc.idx < sc.exp.length && sc.exp[sc.idx].t0 < t - W) {
     const x = sc.exp[sc.idx];
     if (!x.hit) { sc.miss++; if (x.e.el) x.e.el.classList.add('miss'); }
+    const bs = barStat(sc, x.e.bar); if (bs) { bs.exp++; if (x.hit) bs.hit++; }
     sc.idx++;
   }
 }
@@ -1712,13 +1864,15 @@ const noteName = (m) => NOTE_NAMES[m % 12] + (Math.floor(m / 12) - 1);
 const HUD = { note: '', noteT: 0, last: '' };
 function hud() {
   const el = document.getElementById('midiHud'); if (!el) return;
-  if (!MIDI.connected) { el.classList.remove('on'); return; }
+  if (!MIDI.connected && !LM.active) { el.classList.remove('on'); return; }
   const parts = [];
+  if (!MIDI.connected) { el.innerHTML = `<span>${LM.hud}</span>`; el.classList.add('on'); return; }   // 学曲子模式、没连 MIDI：只显示练习进度
   if (HUD.note && performance.now() - HUD.noteT < 1500) parts.push('🎹 ' + HUD.note); else parts.push('🎹');
-  const sc = SC[P.mode === 'follow' ? P.curEx : P.visEx];
+  const sc = SC[scKey()];
   if (P.playing && sc && sc.exp.length) parts.push(`✓${sc.hit} ✗${sc.miss} 错${sc.wrong}`);
   else if (!P.playing) parts.push('按 ▶ 播放后跟着弹');
-  if (HUD.last) parts.push(HUD.last);
+  if (LM.active && LM.hud) parts.push(LM.hud);
+  else if (HUD.last) parts.push(HUD.last);
   el.innerHTML = parts.map((x) => `<span>${x}</span>`).join('');
   el.classList.add('on');
 }
@@ -1730,8 +1884,9 @@ function onNoteOn(m, vel) {
   if (S.settings.midiSound && AU.ctx) AU.note(m, AU.ctx.currentTime, 0.6, 0.4 + vel / 200);
   if (!P.playing) return;
   if (P.mode === 'follow') return followNote(m);
-  const sc = SC[P.visEx]; if (!sc) return;
+  const sc = SC[scKey()]; if (!sc) return;
   const t = posT0(AU.ctx.currentTime);
+  if (P.countIn && t < P.countIn.to - 0.25 * factor()) return;   // 预备拍里按的键不算
   const W = 0.25 * factor();
   let found = null;
   for (let i = Math.max(0, lowerBound(sc.exp, t - W)); i < sc.exp.length && sc.exp[i].t0 <= t + W; i++) {
@@ -1741,15 +1896,16 @@ function onNoteOn(m, vel) {
     found.hit = true; sc.hit++;
     found.e.hitN = (found.e.hitN || 0) + 1;
     if (found.e.el && found.e.hitN >= found.e.notes.length) { found.e.el.classList.remove('miss'); found.e.el.classList.add('hit'); }
-  } else sc.wrong++;
+  } else { sc.wrong++; const bs = barStat(sc, locateBar(t)); if (bs) bs.wrong++; }
   updateLiveScore();
 }
 function onNoteOff(m) { keyHl(m, false, 'user'); }
 function updateLiveScore() {
-  const sc = SC[P.mode === 'follow' ? P.curEx : P.visEx]; if (!sc) return;
+  const sc = SC[scKey()]; if (!sc) return;
   hud();
 }
 function showScore(gi) {
+  if (LM.active) return;
   const sc = SC[gi]; if (!sc || !MIDI.connected) return;
   const tot = sc.exp.length; if (!tot) return;
   const pct = Math.round((100 * sc.hit) / tot);
@@ -1796,14 +1952,18 @@ function startFollow() {
   P.mode = 'follow'; P.playing = true;
   const ex = S.exs[S.cur.ex];
   FOL.idx = lowerBound(S.ons, ex.bars[S.cur.bar].t0);
+  if (LM.active) FOL.idx = lowerBound(S.ons, learnFollowStartT0());
   prepFollow();
   updatePlayBtn();
 }
 function prepFollow() {
   if (FOL.timer) { clearTimeout(FOL.timer); FOL.timer = null; }
   const o = S.ons[FOL.idx];
+  if (!o && LM.active) { learnFollowPassEnd(); return; }
   if (!o) { stopPlay(false); return; }
   ensureRendered(o.ex);
+  if (LM.active && (o.t0 >= LM.endT0 - 1e-6 || !o)) { learnFollowPassEnd(); return; }
+  if (LM.active && o.ex !== P.curEx) P.curEx = o.ex;
   if (o.ex !== P.curEx) {
     showScore(P.curEx);
     if (S.settings.loop) { const ex = S.exs[P.curEx]; FOL.idx = lowerBound(S.ons, ex.startT0); resetScore(P.curEx); return prepFollow(); }
@@ -1811,7 +1971,7 @@ function prepFollow() {
     P.curEx = o.ex; resetScore(o.ex);
   }
   FOL.need = new Set(); FOL.got = new Set();
-  for (const e of o.evs) if (practiceHand(e.hand)) { e.notes.forEach((n) => FOL.need.add(n.midi)); if (e.el) e.el.classList.add('expect'); }
+  for (const e of o.evs) if (practiceHand(e.hand)) { e.notes.forEach((n) => { if (!n.tieStop) FOL.need.add(n.midi); }); if (e.el) e.el.classList.add('expect'); }
   updateStatus(o.bar);
   if (!FOL.need.size) {
     playOthers(o);
@@ -1827,22 +1987,22 @@ function playOthers(o) {
   for (const e of o.evs) {
     if (practiceHand(e.hand) || !handPlays(e.hand)) continue;
     const dur = e.dur * spt(ex) / factor();
-    e.notes.forEach((n) => AU.note(n.midi, now, dur, 0.55));
+    e.notes.forEach((n) => { if (!n.tieStop) AU.note(n.midi, now, (n.tieDur || e.dur) * spt(ex) / factor(), 0.55); });
     P.vq.push({ on: now, off: now + dur, n: e, midi: e.notes[0].midi, started: false });
   }
 }
 function followNote(m) {
-  const sc = SC[P.curEx];
+  const sc = SC[scKey()];
   if (FOL.need.has(m)) {
     FOL.got.add(m);
     if ([...FOL.need].every((x) => FOL.got.has(x))) {
       const o = S.ons[FOL.idx];
       for (const e of o.evs) if (practiceHand(e.hand) && e.el) { e.el.classList.remove('expect'); e.el.classList.add('hit'); }
-      if (sc) sc.hit += FOL.need.size;
+      if (sc) { sc.hit += FOL.need.size; const bs = barStat(sc, o.bar); if (bs) { bs.exp += FOL.need.size; bs.hit += FOL.need.size; } }
       playOthers(o);
       FOL.idx++; prepFollow();
     }
-  } else { if (sc) sc.wrong++; flashKey(m); }
+  } else { if (sc) { sc.wrong++; const bs = barStat(sc, S.ons[FOL.idx] && S.ons[FOL.idx].bar); if (bs) bs.wrong++; } flashKey(m); }
   updateLiveScore();
 }
 function flashKey(m) { const k = KBD.keys[m]; if (!k) return; k.classList.add('bad'); setTimeout(() => k.classList.remove('bad'), 250); }
@@ -1873,6 +2033,7 @@ function buildKeyboard() {
 
 /* ======================= UI ======================= */
 function $(id) { return document.getElementById(id); }
+function escHtml(t) { return String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 3200); }
 function updatePlayBtn() { $('bPlay').innerHTML = P.playing ? '❚❚ 暂停' : '▶ 播放'; $('bPlay').classList.toggle('on', P.playing); hud(); }
 function updateSpeedLabel() {
@@ -1882,7 +2043,9 @@ function updateSpeedLabel() {
   $('spd').value = S.settings.speed;
 }
 function updateStatus(bar) {
-  const ex = S.exs[bar.ex]; const L = LEVELS[ex.li];
+  const ex = S.exs[bar.ex];
+  if (ex.learn) { $('status').innerHTML = `<b>${escHtml(ex.title)}</b> <span class="long">第 </span>${bar.num}/${ex.nBarsTotal}<span class="long"> 小节</span>`; updateSpeedLabel(); return; }
+  const L = LEVELS[ex.li];
   $('status').innerHTML = `<b>${ex.li === 0 ? '入门' : L.name}</b> <span class="long">练习 </span>${ex.ei + 1}/${EX_PER_LEVEL} · <span class="long">第 </span>${bar.bi + 1}/${ex.bars.length}<span class="long"> 小节</span>`;
   if ($('selLevel').value !== String(ex.li)) $('selLevel').value = String(ex.li);
   updateSpeedLabel();
@@ -1897,7 +2060,7 @@ function seek(exI, barI, scroll = true) {
   saveSettings();
   if (was) startPlay();
 }
-function saveSettings() { try { localStorage.setItem('sr.settings', JSON.stringify(S.settings)); localStorage.setItem('sr.lastLevel', String(S.exs[S.cur.ex]?.li ?? 0)); } catch (e) { } }
+function saveSettings() { try { localStorage.setItem('sr.settings', JSON.stringify(S.settings)); if (!LM.active) localStorage.setItem('sr.lastLevel', String(S.exs[S.cur.ex]?.li ?? 0)); } catch (e) { } }
 function loadSettings() {
   // 矮屏（手机横屏）默认不显示屏幕键盘，把高度留给谱面
   S.settings.kbd = Math.min(window.innerWidth, window.innerHeight) >= 520;
@@ -1964,6 +2127,7 @@ function initUI() {
     const r = sys.getBoundingClientRect();
     const x = (e.clientX - r.left) / s.zoom;
     let bar = s.bars.find((b) => x >= b.x0 && x < b.x1) || s.bars[s.bars.length - 1];
+    if (LM.active && LM.picking) { learnPickBar(bar); return; }
     seek(bar.ex, bar.bi, false);
   });
   window.addEventListener('keydown', (e) => {
@@ -1999,11 +2163,13 @@ function initUI() {
     const t = e.changedTouches[0]; const dx = t.clientX - tx, dy = t.clientY - ty;
     if (performance.now() - tt < 600 && Math.abs(dx) > 70 && Math.abs(dy) < 45) { (dx < 0 ? $('bNext') : $('bPrev')).click(); }
   }, { passive: true });
+  learnInitUI();
   // 切到后台时暂停（iOS 会挂起声音）
   document.addEventListener('visibilitychange', () => { if (document.hidden && P.playing) stopPlay(true); });
 }
 async function rerender() {
   const was = P.playing; if (was) stopPlay(true);
+  if (LM.active) return learnRebuild();
   const cur = { ...S.cur };
   $('loading').classList.add('show');
   await renderAll((f) => { $('loadBar').style.width = Math.round(f * 100) + '%'; });
@@ -2048,11 +2214,1260 @@ async function main() {
   const seed = Number.isFinite(h) && h > 0 ? h : Math.floor(Math.random() * 900000) + 100000;
   let lvl = 0; try { lvl = clamp(parseInt(localStorage.getItem('sr.lastLevel') || '0', 10) || 0, 0, LEVELS.length - 1); } catch (e) { }
   await regenerate(seed, lvl);
+  await learnRestore();
   requestAnimationFrame(frame);
   try { if (!localStorage.getItem('sr.seenHelp')) { $('help').classList.add('show'); localStorage.setItem('sr.seenHelp', '1'); } } catch (e) { }
 }
-window.__SR = { ensureRendered, AU, MIDI, onNoteOn, FOL, SC, posT0, setSpeed, S, P, genExercise, validatePiece, LEVELS, EX_PER_LEVEL, generateAll, seek, startPlay, stopPlay, buildBarVF, modsWidth };
+window.__SR = { unrollOrder, pop909ToPiece, pop909clToPiece, pop909Load, get POP909() { return POP909; }, get LM() { return LM; }, get SCL() { return SC.L; }, learnPages, parseMusicXML, parseMidi, midiToPiece, unzipMusicXML, inflateJS, learnEnter, learnExit, buildTimeline, renderAll, ensureRendered, AU, MIDI, onNoteOn, FOL, SC, posT0, setSpeed, S, P, genExercise, validatePiece, LEVELS, EX_PER_LEVEL, generateAll, seek, startPlay, stopPlay, buildBarVF, modsWidth };
 window.addEventListener('DOMContentLoaded', main);
+
+/* POP909 曲目表（编号|歌名|歌手|每小节拍数+每拍细分），来自 music-x-lab/POP909-Dataset 的 index.xlsx（MIT 许可）。
+ * 乐谱数据不在本程序里：选歌时才从该数据集的 GitHub 直接下载。 */
+const POP909_LIST = "1|123我爱你|新乐尘符|22\n2|123木头人|黑涩会美眉|22\n3|9420|麦小兜|22\n4|Dear Friend|顺子|22\n5|I Believe|范逸臣|22\n6|Lovelovelove|蔡依林|22\n7|一万个对不起|祁隆|22\n8|一万个理由|郑源|22\n9|一万个舍不得|庄心妍|22\n10|一个人失忆|薛凯琪|22\n11|一个人的北京|好妹妹乐队|22\n12|一个人的天荒地老|张宇|22\n13|一个人的寂寞两个人的错|贺一航|22\n14|一个人的精彩|萧亚轩|23\n15|一个人走|刘佳|22\n16|一亿个伤心|蒙面哥|22\n17|一剪梅|费玉清|22\n18|一剪梅 DJ费玉清|DJ费玉清|22\n19|一千年以后|林俊杰|22\n20|一千零一夜|邰正宵|22\n21|一吻之间|张碧晨|22\n22|一场游戏一场梦|王杰|22\n23|一壶老酒|陆树铭|22\n24|一天一点爱恋|梁朝伟|22\n25|一天到晚游泳的鱼|张雨生|22\n26|一帘幽梦|邓丽君|22\n27|一曲红尘|郭少杰|22\n28|一百个放心|张津涤|22\n29|一直很安静|阿桑|22\n30|一眼万年|S.H.E|22\n31|一瞬间|丽江小倩|22\n32|一袖云|刘珂矣|22\n33|一路向北|冷漠|22\n34|丁香花|唐磊|32\n35|七里香|刘瑞琦|22\n36|三十出头|大哲|22\n37|三寸天堂|严艺丹|22\n38|三寸日光|梁静茹|22\n39|三生三世十里桃花|那英|22\n40|三生石上一滴泪|望海高歌|22\n41|下一次相遇|雨露|22\n42|下定决心忘记你|大哲|22\n43|下沙|游鸿明|22\n44|下辈子不做女人【新版】|陈瑞|22\n45|下辈子如果我还记得你|马郁|22\n46|下雨了|薛之谦|22\n47|下雨天|南拳妈妈|22\n48|下马酒之歌|乌兰图雅|22\n49|不仅仅是喜欢|孙语赛 萧全|22\n50|不再联系|夏天|22\n51|不再见|陈学冬|22\n52|不分手的恋爱|汪苏泷|22\n53|不变的情缘|正云|22\n54|不后悔遇到你|弹唱小蓉|22\n55|不将就|李荣浩|22\n56|不愿红尘错过你|吴易航|22\n57|不是因为寂寞才想你|T.R.Y|22\n58|不是我不小心|张镐哲|22\n59|不爱我放了我|许茹芸|22\n60|不白活一回|毛阿敏|22\n61|不管有多苦|那英|22\n62|不老梦|银临|32\n63|不能说的秘密|周杰伦|22\n64|不能这样活|刘欢|22\n65|不要再来伤害我|张振宇|22\n66|不要在我寂寞的时候说爱我|郑源|22\n67|不要说话|陈奕迅|22\n68|不让我的眼泪陪我过夜|齐秦|22\n69|不醉不会|田馥甄|22\n70|丑八怪|薛之谦|22\n71|世界末日|周杰伦|22\n72|东方之珠|罗大佑|22\n73|东风志|Aki阿杰|22\n74|东风破|周杰伦|22\n75|丢了幸福的猪|姜玉阳|22\n76|两只蝴蝶|庞龙|22\n77|中华民谣|孙浩|22\n78|为了谁|祖海|22\n79|为什么相爱的人不能在一起|郑源|22\n80|为你写诗|吴克群|22\n81|为你我受冷风吹|林忆莲|22\n82|为你等待|次仁央宗|22\n83|为你而痛|岳思思|22\n84|为爱付出|庄妮|22\n85|为爱痴狂|刘若英|22\n86|九九女儿红|陈少华|22\n87|九张机|叶炫清|22\n88|九百九十九朵玫瑰|邰正宵|22\n89|二十岁的某一天|花粥|22\n90|云在飞|云飞|22\n91|亲亲我的宝贝|周华健|22\n92|亲密爱人|蔡琴|23\n93|亲爱的你怎么不在我身边|江美琪|22\n94|亲爱的小孩|苏芮|22\n95|亲爱的路人|刘若英|22\n96|人在旅途|云菲菲|22\n97|人生若只如初见|望海高歌|22\n98|人质|张惠妹|22\n99|人间|王菲|22\n100|今世有缘|云菲菲|22\n101|今夜你又在和谁约会|涓子|22\n102|今夜无眠|周冰倩|32\n103|今夜的你又在和谁约会|暴林|22\n104|今天|刘德华|22\n105|今生只为遇见你|波拉|22\n106|今生缘|川子|22\n107|从头再来|刘欢|32\n108|他一定很爱你|阿杜|22\n109|他还是不懂|SHE|22\n110|以后别做朋友|周兴哲|22\n111|以后的以后|庄心妍|22\n112|会呼吸的痛|梁静茹|22\n113|会痛的石头|萧敬腾|22\n114|传奇|李健|22\n115|伤了心的女人怎么了|刘涛|22\n116|伤心1999|王杰|22\n117|伤心城市|云菲菲|22\n118|伤心太平洋|任贤齐|22\n119|伤心泪|陈星|22\n120|伤心的时候可以听情歌|欢子|22\n121|伤心的站台|安东阳|22\n122|伤河|李雨儿|22\n123|何必在一起|张杰|22\n124|何日君再来|邓丽君|22\n125|何时了却这牵挂|晨熙|22\n126|你一定要幸福|何洁|22\n127|你不知道的事|王力宏|22\n128|你会爱我到什么时候|陶钰玉|22\n129|你到底有没有爱过我|蓝波|22\n130|你到底爱谁|刘嘉亮|22\n131|你就不要想起我|田馥甄|22\n132|你快回来|孙楠|22\n133|你怎么舍得我难过|黄品源|22\n134|你是我的玫瑰花|庞龙|22\n135|你曾是少年|S.H.E|22\n136|你潇洒我漂亮|韩宝仪|22\n137|你爱我像谁|张卫健|22\n138|你牛什么牛|唐古|22\n139|你的样子|林志炫|22\n140|你的甜蜜|范晓萱|22\n141|你的眼神|蔡琴|22\n142|你的眼角流着我的泪|曹越|22\n143|你的过去我不介意|唐古|22\n144|你的选择|易欣|22\n145|你知道我在等你吗|白百何|22\n146|你究竟有几个好妹妹|孟庭苇|22\n147|你要的不是我|林俊杰|22\n148|你还要我怎样|薛之谦|22\n149|修炼爱情|林俊杰|22\n150|倒带|蔡依林|22\n151|借|毛不易|22\n152|假如爱有天意|李健|32\n153|假情真爱|阿华|22\n154|假装|陈雪凝|22\n155|偏爱|张芸京|22\n156|做你的爱人|饶天亮|22\n157|做你的雪莲|艾歌|22\n158|偿还|邓丽君|22\n159|催眠|王菲|22\n160|傻子|林宥嘉|22\n161|像我这样的人|毛不易|22\n162|像梦一样自由|汪峰|22\n163|像风一样自由|许巍|22\n164|儿歌|张悬|22\n165|儿行千里|刘和刚|22\n166|兄弟 想你了|姜鹏|22\n167|兄弟干杯|庞龙|22\n168|兄弟抱一下|庞龙|22\n169|光|陈粒|22\n170|光年之外|邓紫棋|22\n171|光阴的故事|罗大佑|23\n172|克卜勒|孙燕姿|22\n173|关不上的窗|周传雄|32\n174|关于郑州的记忆|李志|22\n175|其实|薛之谦|22\n176|其实你不懂我的心|童安格|32\n177|其实都没有|杨宗纬|22\n178|再回到从前|张镐哲|22\n179|再见|张震岳|22\n180|最初的梦想|范玮琪|22\n181|最初的记忆|徐佳莹|22\n182|最后一个情人|赵真|22\n183|最后一首情歌|苏琛|22\n184|最幸福的人|曾春年|22\n185|最浪漫的事|赵咏华|22\n186|最熟悉的陌生人|萧亚轩|22\n187|最真的梦|孙露|22\n188|最美情侣|白小白|22\n189|最美的光|尚琪祺|22\n190|最美的太阳|张杰|22\n191|最美的情缘|魏新雨|22\n192|最远的你是我最近的爱|金悦|22\n193|最重要的决定|范玮琪|22\n194|最长的电影|周杰伦|22\n195|军中绿花|小曾|22\n196|冲动的惩罚|刀郎|22\n197|冻结|林俊杰|22\n198|凡人歌|李宗盛|22\n199|出卖|简弘亦|22\n200|刀剑如梦|董贞|22\n201|分手在那个秋天|浩瀚|22\n202|刚好遇见你|李玉刚|22\n203|初爱【原版】|杨宗纬|32\n204|别再说|孙露|22\n205|别哭我最爱的人|郑智化|22\n206|别找我麻烦|蔡健雅|22\n207|别说我的眼泪你无所谓|郑源|22\n208|前门情思大碗茶|杭天琪|22\n209|剪爱|张惠妹|22\n210|勇气|梁静茹|22\n211|勉为其难|王冕|22\n212|勿忘你|高安|22\n213|勿忘心安|张杰|22\n214|包容|郑源|22\n215|匆匆那年|王菲|32\n216|化身孤岛的鲸|周深|22\n217|十一年|邱永传|22\n218|十七岁的雨季|林志颖|22\n219|十五的月亮|董文华|22\n220|十年|陈奕迅|22\n221|千年等一回|高胜美|22\n222|千言万语|邓丽君|22\n223|半城烟沙|许嵩|22\n224|半岛铁盒|周杰伦|22\n225|半情歌|元若蓝|22\n226|卓玛|亚东|22\n227|南山南|马頔|22\n228|南方姑娘|江智民|22\n229|卷珠帘|霍尊|22\n230|历史的天空|毛阿敏|22\n231|原来你也在这里|刘若英|32\n232|原来你什么都不要|张惠妹|22\n233|原谅|张玉华|22\n234|原谅我一次|欢子|22\n235|去大理|郝云|22\n236|发如雪|周杰伦|22\n237|受了点伤|阿桑|22\n238|只要你过得比我好|钟镇涛|22\n239|可乐|赵浴辰|22\n240|可念不可说|崔子格|22\n241|向天再借五百年|韩磊|22\n242|听海|张学友|22\n243|听说爱情回来过|杨宗纬|22\n244|吻和泪|周子寒|22\n245|味道|辛晓琪|22\n246|命运不是辘轳|李娜|22\n247|和你一样|李宇春|22\n248|咖喱咖喱|叶洛洛|22\n249|哥有老婆|纪晓斌|22\n250|哭砂|张惠妹|22\n251|唐人|孙子涵|22\n252|唯一|王力宏|22\n253|喜剧之王|李荣浩|22\n254|喜欢你|徐佳莹|32\n255|嘴巴嘟嘟|刘子璇|22\n256|囚鸟|彭羚|22\n257|四季歌|邓丽君|22\n258|回忆那么伤|孙子涵|22\n259|回忆里的那个人|李行亮|22\n260|因为你爱上他|蒋雪儿|22\n261|因为爱所以爱|谢霆锋|22\n262|在心里从此永远有个你|办桌二人组|22\n263|在梦中|彭丽丽|22\n264|在此刻|韩磊|22\n265|在深秋|阿悄|22\n266|在那遥远的地方|王洛宾|22\n267|夏洛特烦恼|金志文|22\n268|外愈|任然|22\n269|外面的世界|齐秦|22\n270|多情人都把灵魂给了谁|李翊君|22\n271|多想做你最爱的人|望海高歌|22\n272|多想留在你身边|刘增瞳|22\n273|夜深人静更想你|望海高歌|22\n274|夜空中最亮的星|逃跑计划|22\n275|夜车|曾轶可|22\n276|大哥|柯受良|22\n277|大海|张雨生|22\n278|大王叫我来巡山【万万没想到】|赵英俊|22\n279|大鱼|周深|22\n280|天之大|毛阿敏|32\n281|天亮了|韩红|22\n282|天使|五月天|22\n283|天使的翅膀|安琥|22\n284|天在下雨我在想你|祁隆|22\n285|天意|刘德华|22\n286|天边|布仁巴雅尔|22\n287|天高地厚|信乐团|22\n288|太多|陈冠蒲|22\n289|太想爱你|张信哲|22\n290|太早|刘允乐|22\n291|你走吧|周艳泓|22\n292|夜曲|周杰伦|22\n293|女人心|陈瑞|22\n294|女儿情|吴静|22\n295|她的背影|王杰|22\n296|好不容易|张靓颖|22\n297|好人一生平安|李娜|22\n298|好听|许茹芸|22\n299|好想好想|古巨基|22\n300|好男人|张镐哲|22\n301|如果你也听说|张惠妹|22\n302|如果你是我的传说|刘德华|22\n303|如果当时|许嵩|22\n304|如果爱下去|张靓颖|22\n305|如果这就是爱情|张靓颖|22\n306|如果这都不算爱|张学友|22\n307|妈妈|祁隆|32\n308|妈妈的吻|卓依婷|22\n309|姐姐|贾盛强|22\n310|姐姐妹妹站起来|陶晶莹|22\n311|孟婆的碗|魏佳艺|23\n312|孤单北半球|欧得洋|22\n313|孤单坠爱|庄心妍|22\n314|孤枕难眠|周华健|22\n315|学不会|林俊杰|22\n316|宁夏|梁静茹|22\n317|安和桥|宋冬野|22\n318|安眠药|张禄籴|22\n319|安静了|S.H.E|22\n320|宝贝|张悬|22\n321|容易受伤的女人|邝美云|22\n322|寂寞沙洲冷|周传雄|22\n323|寂寞的双手|张可儿|22\n324|寂寞的季节|陶喆|22\n325|对嘴|周笔畅|22\n326|小兔子乖乖|儿歌|22\n327|小宝贝|夏天播放|22\n328|小小|容祖儿|32\n329|小小的太阳|孙露|22\n330|小幸运|田馥甄|22\n331|小星星|经典名曲|22\n332|小毛驴|儿童歌曲|22\n333|小燕子|儿童歌曲|22\n334|小白杨|阎维文|22\n335|小芳|李春波|22\n336|小苹果|筷子兄弟|22\n337|小草|杨烁|22\n338|少年锦时|赵雷|22\n339|尚好的青春|孙燕姿|22\n340|尽头|赵方婧|22\n341|山水之间|许嵩|22\n342|岁月神偷|金玟岐|22\n343|左边|杨丞琳|22\n344|带我走|杨丞琳|22\n345|带走|莫艳琳|22\n346|平凡之路|朴树|22\n347|幸福的瞬间|许绍洋|22\n348|幻听|许嵩|22\n349|广东爱情故事|广东雨神|22\n350|庐州月|许嵩|23\n351|康定情歌|卓依婷|22\n352|康美之恋|谭晶|22\n353|开不了口|周杰伦|22\n354|开始懂了|孙燕姿|22\n355|开开心心每一天|囚鸟|22\n356|异乡人|李健|22\n357|张三的歌|蔡琴|22\n358|弱点|贺敬轩|22\n359|当你|林俊杰|22\n360|当你老了|赵照|23\n361|当我孤独的时候还可以抱着你|郑源|22\n362|当我想你的时候|汪峰|22\n363|当爱在靠近|刘若英|22\n364|很爱很爱你|刘若英|22\n365|得到你的人却得不到你的心|欢子|22\n366|微风细雨|邓丽君|22\n367|心云|林志颖|22\n368|心如刀割|张学友|22\n369|心愿|四个女生|32\n370|心痛2009新版|欢子|22\n371|心相印手牵手|杨钰莹|22\n372|心要让你听见|邰正宵|22\n373|心酸|林宥嘉|22\n374|忘不了|童安格|22\n375|忘情水|刘德华|22\n376|忘记时间|胡歌|22\n377|忽然之间|莫文蔚|22\n378|忽然好想念|唐古|22\n379|怀念青春|刘刚|23\n380|怎么唱情歌|刘惜君|22\n381|思念天边的你|谢世超|22\n382|思念无期|望海高歌|22\n383|思慕|郁可唯|22\n384|恋人心|魏新雨|22\n385|恋曲1990|罗大佑|22\n386|恋爱ing|五月天|22\n387|恰似你的温柔|蔡琴|22\n388|悟|刘德华|22\n389|情人|刀郎|22\n390|情人鹤顶红|叶贝文|22\n391|情歌|梁静茹|22\n392|情毒|囚鸟|22\n393|情深深雨蒙蒙|赵薇|23\n394|情花|本兮|22\n395|情锁|陈星|22\n396|惜别的海岸|龙飘飘|22\n397|想你想到心里头|杨浩龙|22\n398|想你的夜|关喆|22\n399|想你零点零一分|张靓颖|22\n400|想和你去吹吹风|张学友|22\n401|想太多|李玖哲|22\n402|想念妈妈|天堂飘雪|22\n403|想着你亲爱的|陈美惠|22\n404|想着你的好|祁隆|22\n405|想自由|林宥嘉|22\n406|愁啊愁|迟志强|22\n407|感动天感动地|宇桐非|22\n408|感恩的心|欧阳菲菲|22\n409|愿做菩萨那朵莲|路勇|22\n410|愿得一人心|李行亮|22\n411|成全|刘若英|22\n412|成都|民谣 赵雷|23\n413|我|蔡依林|22\n414|我不后悔|郑源|22\n415|我不恨你|郑源|22\n416|我不想说|杨钰莹|22\n417|我不愿让你一个人|五月天|22\n418|我以为|品冠|22\n419|我们不一样|大壮|22\n420|我们俩|郭顶|22\n421|我们的明天【重返20岁】|鹿晗|22\n422|我们的歌|王力宏|22\n423|我们的爱|飞儿乐团|22\n424|我们说好的|张靓颖|22\n425|我们都是好孩子|王筝|22\n426|我会好好的|王心凌|22\n427|我最亲爱的|张惠妹|22\n428|我只在乎你|邓丽君|22\n429|我在前世约了你|唐古|22\n430|我多喜欢你，你会知道|王俊琪|22\n431|我好想你|苏打绿|22\n432|我害怕|薛之谦|22\n433|我很快乐|刘惜君|22\n434|我总是一个人在练习一个人|林宥嘉|22\n435|我想我不会爱你|田馥甄|22\n436|我想我不够好|单色凌|22\n437|我愿意|王菲|22\n438|我是一只鱼|任贤齐|22\n439|我是真的爱上你|王杰|22\n440|我是真的真的很爱你|言承旭|22\n441|我曾用心爱着你|潘美辰|22\n442|我爱洗澡|范晓萱|23\n443|我爱的人|陈小春|22\n444|我的中国心|张明敏|22\n445|我的唇吻不到我爱的人|王奕心|22\n446|我的好兄弟|小沈阳|22\n447|我的好妈妈|儿歌|22\n448|我的心好冷|Sara|22\n449|我的快乐就是想你|陈雅森|22\n450|我的情深若你懂|王建荣|22\n451|我的楼兰|云朵|22\n452|我的歌声里|曲婉婷|22\n453|我的眼里只有你|景岗山|22\n454|我相信|杨培安|22\n455|我真的受伤了|张学友|22\n456|我知道你很难过|蔡依林|22\n457|我等到花儿也谢了|张学友|22\n458|我管你|华晨宇|22\n459|我终于失去了你|赵传|22\n460|我要抱着你|庞龙|22\n461|我要的飞翔|许飞|22\n462|我走以后|张靓颖|22\n463|我还想她|林俊杰|22\n464|我这个你不爱的人|迪克牛仔|22\n465|戒烟|李荣浩|22\n466|手掌心|丁当|22\n467|找一个字代替|邰正宵|22\n468|把悲伤留给自己|陈升|22\n469|把酒倒满|李晓杰|22\n470|抹去泪水|韩宝仪|22\n471|拉住妈妈的手|刘和刚|22\n472|掌声响起来|毛阿敏|22\n473|搁浅|周杰伦|22\n474|摘下满天星|郑少秋|22\n475|撕夜|阿杜|22\n476|擦肩而过|郑源|22\n477|放不下的情缘|勾辉|22\n478|放手去爱|迪克牛仔|22\n479|放生|范逸臣|22\n480|放过|崔天琪|22\n481|故乡|许巍|22\n482|故乡的云|费翔|22\n483|数到五答应我|曹格|22\n484|斑马斑马|张婧懿|22\n485|新不了情|万芳|22\n486|新女人花|陈瑞|22\n487|新贵妃醉酒|李玉刚|22\n488|旅行|许巍|22\n489|旅行的意义|陈绮贞|22\n490|旋木|王菲|22\n491|无奈的思绪|韩宝仪|22\n492|无情的世界无情的你|冷漠|22\n493|无所谓|杨坤|22\n494|无条件|陈奕迅|22\n495|日不落|蔡依林|22\n496|时间煮雨|郁可唯|22\n497|明天你是否依然爱我|童安格|22\n498|明天过后|张杰|22\n499|明明就|周杰伦|22\n500|明月千里寄相思|徐小凤|22\n501|明月天涯|五音Jw|22\n502|易燃易爆炸|陈粒|22\n503|星座书上|许嵩|22\n504|星月情缘|安东阳|22\n505|星月神话|金莎|22\n506|星语心愿|任贤齐|22\n507|春夏秋冬的你|王宇良|22\n508|春天的故事|董文华|22\n509|春天里|汪峰|23\n510|春泥|庾澄庆|22\n511|春风十里|鹿先森乐队|22\n512|昨夜星辰|高胜美|22\n513|是否我真的一无所有|王杰|22\n514|是非题|范玮琪|22\n515|晚秋|毛宁|22\n516|晴天|周杰伦|22\n517|暖心|风语|22\n518|暖暖|梁静茹|22\n519|曲终人散|张宇|22\n520|曹操|林俊杰|22\n521|曾经最美|朱铭捷|22\n522|曾经心痛|卓依婷|22\n523|曾经是我最爱的人|陈瑞|22\n524|曾经爱过你|郑源|22\n525|曾经的你|许巍|22\n526|月亮代表我的心|张国荣|22\n527|月亮惹的祸|张宇|22\n528|月半小夜曲|陈慧娴|22\n529|月半弯|陈坤|22\n530|月满西楼|安雯|22\n531|月牙湾|F.I.R|22\n532|有一种爱叫做放手|阿木|22\n533|有何不可|许嵩|22\n534|有没有一种思念永不疲惫|许强|22\n535|有没有人告诉你|陈楚生|22\n536|朋友|周华健|22\n537|朋友别哭|吕方|22\n538|朋友名义|六哲|22\n539|朋友的酒|李晓杰|22\n540|望星空|董文华|22\n541|末班车|萧煌奇|22\n542|杀猪刀|杨浩龙|22\n543|枕着你的名字入眠|陈明|22\n544|柠檬草的味道|蔡依林|22\n545|桃花运|杨钰莹|22\n546|梅花三弄|卓依婷|22\n547|梅花泪|云菲菲|22\n548|梦醒了|那英|22\n549|梦醒时分|陈淑桦|22\n550|梦里想你多少回|雨露|22\n551|梨花又开放|邱诗晗|22\n552|棉花糖|至上励合|22\n553|樱花草|Sweety|22\n554|歌在飞|申菲|22\n555|死心塌地去爱你|门丽|22\n556|殇雪|云菲菲|22\n557|残酷月光|林宥嘉|22\n558|比心更痛的眼眸|郑源|22\n559|氧气|范晓萱|22\n560|水手|郑智化|22\n561|水星记|郭顶|22\n562|水墨雪|陈瑞|22\n563|永远是朋友|卓依婷|22\n564|没了心的爱|任盈盈|22\n565|没有什么不同|曲婉婷|22\n566|没有你陪伴我真的好孤单|梦然|22\n567|泪桥|伍佰|22\n568|泪海|许茹芸|22\n569|泼茶香|刘珂矣|22\n570|洋葱|杨宗纬|22\n571|流年|王菲|22\n572|流星雨|F4|22\n573|流浪歌|卓依婷|22\n574|流着泪说分手|金志文|22\n575|浪人情歌|伍佰|23\n576|浪花一朵朵|任贤齐|22\n577|浪费|林宥嘉|22\n578|海浪|黄品源|22\n579|海芋恋|萧敬腾|23\n580|消愁|毛不易|22\n581|淋雨一直走|张韵涵|22\n582|清明雨上|许嵩|22\n583|渴望|毛阿敏|22\n584|滚滚红尘|陈淑桦|32\n585|滴答|侃侃|22\n586|潇洒的走|高胜美|22\n587|潮湿的心|卓依婷|22\n588|火烧的寂寞|信|22\n589|火苗|格格|22\n590|灰姑娘|郑钧|22\n591|烛光里的妈妈|毛阿敏|22\n592|爱|莫文蔚|32\n593|爱一点|莫艳琳|22\n594|爱不爱我|零点乐队|22\n595|爱与哀愁|童安格|22\n596|爱久见人心|梁静茹|22\n597|爱似水仙|金海心|22\n598|爱你一万年|韩宝仪|22\n599|爱你十分泪七分|裘海正|22\n600|爱你没错|张信哲|22\n601|爱你那么多|陈瑞|22\n602|爱到尽头也无悔|梦然|22\n603|爱到深处全是泪|雨中百合|22\n604|爱囚|庄心妍|22\n605|爱在西元前|周杰伦|22\n606|爱如潮水|张信哲|22\n607|爱如空气|孙俪|22\n608|爱就一个字|张信哲|22\n609|爱情转移|陈奕迅|22\n610|爱情这杯酒谁喝都得醉|闫旭|22\n611|爱情错觉|王娅|22\n612|爱我的人和我爱的人|游鸿明|22\n613|爱我还是他|陶喆|22\n614|爱的世界只有你|祁隆|22\n615|爱的代价|张艾嘉|22\n616|爱的天国|王心凌|22\n617|爱的奉献|韦唯|22\n618|爱的路上只有我和你|任贤齐|22\n619|爱的魔法|金莎|22\n620|爱笑的眼睛|林俊杰|22\n621|爱要怎么说出口|林俊杰|22\n622|父亲|筷子兄弟|22\n623|父亲写的散文诗|李健|22\n624|父亲的草原母亲的河|云飞|33\n625|爸爸妈妈|王蓉|22\n626|牧羊曲|龚玥|22\n627|牵丝戏|Aki阿杰|22\n628|牵挂你的人是我|高林生|22\n629|狂浪生|李宗南|22\n630|狐狸|薛之谦|22\n631|独家记忆|陈小春|22\n632|独角戏|许茹芸|23\n633|狮子座|曾轶可|22\n634|献给妈妈的歌|德乾旺姆|22\n635|王妃|萧敬腾|22\n636|玫瑰花的葬礼|许嵩|22\n637|珊瑚颂|卓依婷|22\n638|甘心情愿|郭峰|22\n639|甜甜的|周杰伦|22\n640|甜蜜蜜|邓丽君|22\n641|生如夏花|朴树|22\n642|生日礼物|江涛|22\n643|生生|林俊杰|22\n644|用心良苦|张宇|22\n645|电台情歌|莫文蔚|22\n646|男人的好|张宇|22\n647|男孩|梁博|22\n648|画颜|魏新雨|22\n649|留什么给你|孙楠|22\n650|疑心病|任然|22\n651|痒|黄龄|22\n652|痴心绝对|李圣杰|22\n653|白桦林|朴树|32\n654|白色恋人|游鸿明|32\n655|白龙马|儿童歌曲|22\n656|百万个吻|陈明真|22\n657|盛夏|毛不易|22\n658|盛夏的果实|莫文蔚|22\n659|相思河|风语|22\n660|相思渡口|祁隆|22\n661|相思的债|陈瑞|22\n662|相逢是首歌|俞静|32\n663|眉间雪|晴愔|22\n664|看得最远的地方|张韶涵|22\n665|看月亮爬上来|张杰|22\n666|看透爱情看透你|冷漠|22\n667|真爱你的云|黄国俊|22\n668|着魔|张杰|22\n669|知道不知道|邓丽君|22\n670|短发|梁咏琪|22\n671|祈祷|卓依婷|22\n672|祖国祖国我们爱你|儿歌|22\n673|祝你平安|孙悦|22\n674|祝我生日快乐|温岚|22\n675|神奇的九寨|容中尔甲|22\n676|离人愁|李袁杰|22\n677|离别|阿杜|22\n678|离别的秋天|孙露|23\n679|秋叶黄了想爹娘|赵真|22\n680|秋天不回来|王强|22\n681|秋风落叶|姜玉阳|22\n682|移情别恋|郭峰|22\n683|空城|杨坤|22\n684|突然好想你|五月天|22\n685|突然想起你|林宥嘉|22\n686|站在草原望北京|乌兰图雅|22\n687|童年|罗大佑|22\n688|童话镇|许娜|22\n689|笑忘书|李荣浩|23\n690|笑红尘|陈淑桦|22\n691|笑脸|谢东|22\n692|笔记|周笔畅|22\n693|笨小孩|刘德华  吴宗宪  柯受良|23\n694|第一次|光良|22\n695|第一次爱的人|王心凌|22\n696|第三者的第三者|弦子|22\n697|等不到的爱|文章|22\n698|等你的季节【步步惊心】|刘诗诗|22\n699|等你等了那么久|祁隆|22\n700|等我回家|薛之谦|22\n701|答应不爱你|郑中基|22\n702|简单爱|周杰伦|22\n703|算了|崔阿扎|22\n704|算什么男人|周杰伦|22\n705|篱笆墙的影子|毛阿敏|22\n706|类似爱情|萧亚轩|22\n707|粉红色的回忆|邓丽君|22\n708|精忠报国|屠洪纲|22\n709|繁花|董贞|22\n710|红尘客栈|周杰伦|22\n711|红尘情歌|高安|22\n712|红玫瑰|张碧晨|22\n713|红色高跟鞋|蔡健雅|22\n714|红豆|王菲|22\n715|红豆红|余静|22\n716|红颜旧|刘涛|22\n717|约定|周蕙|22\n718|练习|刘德华|22\n719|绅士|薛之谦|22\n720|绒花|李谷一|22\n721|给未来的自己|梁静茹|22\n722|绝口不提爱你|郑中基|22\n723|绿岛小夜曲|邓丽君|22\n724|缘|高胜美|22\n725|缘分五月|伍月|22\n726|罗曼蒂克的爱情|贺敬轩|22\n727|美丽心情|本多RuRu|22\n728|美丽的草原我的家|佚名女|22\n729|美人吟|李玲玉|22\n730|美酒加咖啡|邓丽君|22\n731|翅膀|林俊杰|22\n732|老妹你真美|韩东|22\n733|老婆你辛苦了|祁隆|22\n734|老父亲|祁隆|22\n735|老男孩|筷子组合|22\n736|肩上的云|王建荣|22\n737|胆小鬼|梁咏琪|22\n738|背叛|曹格|22\n739|背对背拥抱|林俊杰|22\n740|胡桃夹子|张碧晨|22\n741|自从有了你|赵薇|23\n742|自从离别后|赵薇|22\n743|至少还有你|林忆莲|22\n744|致青春|王菲|32\n745|舍不得忘记你|望海高歌|22\n746|舍得|王呈章|22\n747|芊芊|回音哥|22\n748|芙蓉雨|刘珂矣|22\n749|芦花|雷佳|32\n750|花太香|任贤齐|22\n751|花海|周杰伦|22\n752|花香|许绍洋|22\n753|苏州河|薛凯琪|22\n754|苦咖啡|汤潮|22\n755|草原上升起不落的太阳|蒋大为|22\n756|莉莉安|宋冬野|32\n757|菊花台|周杰伦|22\n758|菩提偈|刘惜君|22\n759|萍聚|卓依婷|22\n760|葫芦娃|儿童歌曲|22\n761|蒲公英的约定|周杰伦|22\n762|蓝莲花|许巍|22\n763|藕断丝连|陈瑞|22\n764|虫儿飞|童声|22\n765|虹之间|金贵晟|22\n766|血染的风采|董文华|22\n767|被伤过的心还可以爱谁|六哲|22\n768|西海情歌|降央卓玛|22\n769|认错|许嵩|22\n770|让她降落|何璐|32\n771|让我留在你身边|唐汉霄|22\n772|记事本|陈慧琳|22\n773|记得|林俊杰|22\n774|许多年以后|赵鑫|22\n775|该死的懦弱|胜屿|23\n776|说了再见|周杰伦|22\n777|说句心里话|阎维文|22\n778|说好了不见面|小贱|22\n779|说好的幸福呢|周杰伦|22\n780|说散就散|袁娅维|22\n781|说爱我|梁一贞|22\n782|说谎|林宥嘉|22\n783|请不要对我说SORRY|何洁|22\n784|诺言|李翊君|22\n785|谁在意我留下的泪|蒋雪儿|22\n786|谁料皇榜中状元|卓依婷|22\n787|谁的眼泪在飞|孟庭苇|22\n788|谢谢你的爱|刘德华|22\n789|谢谢你的爱1999|谢霆锋|22\n790|豆浆油条|林俊杰|22\n791|贝加尔湖畔|李健|22\n792|走江南|亦心Elissa|22\n793|走过咖啡屋|卓依婷|22\n794|趁早|张宇|22\n795|越过山丘|杨宗纬|22\n796|路口|张震岳|22\n797|路边的野花不要采|邓丽君|22\n798|踏浪|卓依婷|22\n799|车站|曹磊|32\n800|轻轻的告诉你|杨钰莹|22\n801|过云雨|张敬轩|23\n802|过客|阿涵|22\n803|过火|张信哲|22\n804|还有我|任贤齐|22\n805|这一生回忆有你就足够|关泽楠|22\n806|远在北方孤独的鬼|花粥|23\n807|远走高飞|金志文|22\n808|迟来的爱|卓依婷|22\n809|追梦人|阿木|22\n810|追梦赤子心|Gala|22\n811|追求|卓依婷|22\n812|退|蒋蒋|22\n813|逃|侯旭|22\n814|逆战|张杰|22\n815|逍遥叹|胡歌|22\n816|逝去的爱|李安|22\n817|遇|Ai Mini|22\n818|遇到|方雅贤|22\n819|遗憾|方炯镔|22\n820|遥远的歌|刘惜君|22\n821|那个人|周延英|22\n822|那些你很冒险的梦|林俊杰|22\n823|那些年|胡夏|22\n824|那女孩对我说|黄义达|22\n825|那年的情书|江美琪|22\n826|都怪我|刘德华|22\n827|都选c|大鹏|22\n828|酒后更想你|倪尔萍|22\n829|酒干倘卖无|孙露|22\n830|酒醉的探戈2001|动力火车|22\n831|醉相思|祁隆|22\n832|重生|容祖儿|22\n833|野子|苏运莹|22\n834|野孩子|杨千嬅|22\n835|野百合也有春天|孟庭苇|22\n836|错过的情人|石梅|22\n837|长安忆|双笙|22\n838|长相依|卓依婷|22\n839|长长的路慢慢地走|陈瑞|22\n840|问|简弘亦|22\n841|闯天涯|司徒兰芳|22\n842|闯码头|大哲|22\n843|闹够了没有原版|赖伟锋|23\n844|阴天快乐|陈奕迅|22\n845|阿刁【消音版】|赵雷|22\n846|阿哥阿妹|谢军|22\n847|除了你|云菲菲|22\n848|陪你一起变老|唐古|22\n849|陪你一起看草原|乌兰托娅|22\n850|陪我看日出|蔡淳佳|22\n851|隐形的翅膀|张韶涵|22\n852|难道爱一个人有错吗|郑源|22\n853|雁南飞|关牧村|22\n854|雨一直下|张宇|22\n855|雨荷|雪晗|22\n856|雨蝶|李翊君|23\n857|雪人|范晓萱|22\n858|需要人陪|王力宏|22\n859|霜雪千年|洛天依|22\n860|青城山下白素贞|赵雅芝|22\n861|青春修炼手册|Tfboys|22\n862|青花|周传雄|22\n863|青藏高原|李娜|22\n864|非你莫属|林依晨|22\n865|靠近一点点|梁心颐|22\n866|风含情水含笑|杨钰莹|22\n867|风吹麦浪|李健|22\n868|风往北吹|孙楠|22\n869|风铃|周蕙|32\n870|风雨无阻|周华健|22\n871|风飞沙|迪克牛仔|22\n872|飘摇|周迅|32\n873|飘雪|陈慧娴|22\n874|飞蛾扑火|彭丽丽|22\n875|香水|谢霆锋|22\n876|香水有毒|胡杨林|22\n877|香烟爱上火柴|张政|22\n878|驼铃|刀郎|22\n879|驿动的心|姜育恒|22\n880|高原红|容中尔甲|22\n881|高原蓝|乌兰托娅|22\n882|鬼迷心窍|李宗盛|22\n883|魔鬼中的天使|田馥甄|22\n884|鱼|姚贝娜|22\n885|鸿雁|呼斯楞|22\n886|黄昏|周传雄|22\n887|黄玫瑰|孙露|32\n888|黑白配|范玮琪|22\n889|黑色幽默|周杰伦|22\n890|默|那英|22\n891|龙卷风|周杰伦|22\n892|不要在我的伤口撒盐|庄心妍|22\n893|但愿人长久|王菲|22\n894|你要的爱|戴佩妮|22\n895|值得|郑秀文|22\n896|可以了|陈奕迅|22\n897|回忆总想哭|姜玉阳 南宫嘉骏|22\n898|在水一方|邓丽君|22\n899|大女人|张宇|22\n900|天空|蔡依林|22\n901|女人的选择|姜育恒|22\n902|女人花|梅艳芳|22\n903|好可惜|庄心妍|22\n904|孤单心事|蓝又时|22\n905|小城故事|邓丽君|22\n906|山不转水转|那英|22\n907|小龙人|小龙人|22\n908|小乌龟|张栋梁|22\n909|蓝精灵|儿童歌曲|22";
+
+/* =====================================================================
+ * 学曲子模式：载入自己的曲谱（MusicXML / .mxl / MIDI），分段循环、速度阶梯、
+ * 从后往前、按小节统计易错处、记录进度。曲谱只存在本机（IndexedDB），不上传。
+ * ===================================================================== */
+const LM = {
+  active: false, id: null, piece: null, bars: [], data: null,
+  startT0: 0, endT0: 0, passFull: false, picking: null, hud: '', loop: true,
+};
+
+/* ---------------- 本机存储 ---------------- */
+const IDB = {
+  db: null, mem: new Map(),
+  open() {
+    if (this.db) return Promise.resolve(this.db);
+    return new Promise((res) => {
+      try {
+        const rq = indexedDB.open('sr-learn', 1);
+        rq.onupgradeneeded = () => rq.result.createObjectStore('pieces');
+        rq.onsuccess = () => { this.db = rq.result; res(this.db); };
+        rq.onerror = () => res(null);
+      } catch (e) { res(null); }
+    });
+  },
+  async put(k, v) {
+    const db = await this.open(); this.mem.set(k, v);
+    if (!db) return false;
+    return new Promise((res) => { try { const tx = db.transaction('pieces', 'readwrite'); tx.objectStore('pieces').put(v, k); tx.oncomplete = () => res(true); tx.onerror = () => res(false); } catch (e) { res(false); } });
+  },
+  async get(k) {
+    if (this.mem.has(k)) return this.mem.get(k);
+    const db = await this.open(); if (!db) return null;
+    return new Promise((res) => { try { const rq = db.transaction('pieces').objectStore('pieces').get(k); rq.onsuccess = () => res(rq.result ?? null); rq.onerror = () => res(null); } catch (e) { res(null); } });
+  },
+  async del(k) {
+    this.mem.delete(k);
+    const db = await this.open(); if (!db) return;
+    return new Promise((res) => { try { const tx = db.transaction('pieces', 'readwrite'); tx.objectStore('pieces').delete(k); tx.oncomplete = () => res(); tx.onerror = () => res(); } catch (e) { res(); } });
+  },
+};
+function lsGet(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } }
+const pieceList = () => lsGet('sr.pieces', []);
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+
+/* ---------------- 解压 .mxl（zip） ---------------- */
+async function inflateRaw(data) {
+  if (typeof DecompressionStream !== 'undefined') {
+    try {
+      const ds = new DecompressionStream('deflate-raw');
+      const out = await new Response(new Blob([data]).stream().pipeThrough(ds)).arrayBuffer();
+      return new Uint8Array(out);
+    } catch (e) { /* 老系统不支持 deflate-raw，用下面的纯 JS 版本 */ }
+  }
+  return inflateJS(data);
+}
+const LBASE = [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258];
+const LEXT = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0];
+const DBASE = [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577];
+const DEXT = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13];
+function inflateJS(src) {
+  let pos = 0, bitbuf = 0, bitcnt = 0;
+  let out = new Uint8Array(Math.max(1024, src.length * 4)), n = 0;
+  const grow = (need) => { if (n + need <= out.length) return; let len = out.length * 2; while (len < n + need) len *= 2; const nb = new Uint8Array(len); nb.set(out.subarray(0, n)); out = nb; };
+  const bit = () => { if (!bitcnt) { if (pos >= src.length) throw new Error('压缩数据不完整'); bitbuf = src[pos++]; bitcnt = 8; } const b = bitbuf & 1; bitbuf >>= 1; bitcnt--; return b; };
+  const bits = (k) => { let v = 0; for (let i = 0; i < k; i++) v |= bit() << i; return v; };
+  const build = (lens) => {
+    const counts = new Uint16Array(16), offs = new Uint16Array(16), symbols = new Uint16Array(lens.length);
+    for (const l of lens) counts[l]++;
+    counts[0] = 0;
+    for (let i = 1; i < 16; i++) offs[i] = offs[i - 1] + counts[i - 1];
+    for (let i = 0; i < lens.length; i++) if (lens[i]) symbols[offs[lens[i]]++] = i;
+    return { counts, symbols };
+  };
+  const decode = (h) => {
+    let code = 0, first = 0, index = 0;
+    for (let len = 1; len < 16; len++) {
+      code |= bit();
+      const count = h.counts[len];
+      if (code - count < first) return h.symbols[index + (code - first)];
+      index += count; first += count; first <<= 1; code <<= 1;
+    }
+    throw new Error('压缩数据有误');
+  };
+  let fixedL = null, fixedD = null;
+  let last;
+  do {
+    last = bit();
+    const type = bits(2);
+    if (type === 0) {
+      bitcnt = 0;
+      const len = src[pos] | (src[pos + 1] << 8); pos += 4;
+      grow(len); out.set(src.subarray(pos, pos + len), n); n += len; pos += len;
+      continue;
+    }
+    let lt, dt;
+    if (type === 1) {
+      if (!fixedL) {
+        const l = new Uint8Array(288); l.fill(8, 0, 144); l.fill(9, 144, 256); l.fill(7, 256, 280); l.fill(8, 280, 288);
+        fixedL = build(l); fixedD = build(new Uint8Array(30).fill(5));
+      }
+      lt = fixedL; dt = fixedD;
+    } else if (type === 2) {
+      const hlit = bits(5) + 257, hdist = bits(5) + 1, hclen = bits(4) + 4;
+      const ORD = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+      const cl = new Uint8Array(19);
+      for (let i = 0; i < hclen; i++) cl[ORD[i]] = bits(3);
+      const ch = build(cl);
+      const lens = new Uint8Array(hlit + hdist);
+      for (let i = 0; i < hlit + hdist;) {
+        const sym = decode(ch);
+        if (sym < 16) lens[i++] = sym;
+        else if (sym === 16) { const prev = lens[i - 1]; let r = 3 + bits(2); while (r--) lens[i++] = prev; }
+        else if (sym === 17) { let r = 3 + bits(3); while (r--) lens[i++] = 0; }
+        else { let r = 11 + bits(7); while (r--) lens[i++] = 0; }
+      }
+      lt = build(lens.subarray(0, hlit)); dt = build(lens.subarray(hlit));
+    } else throw new Error('压缩数据有误');
+    for (;;) {
+      const sym = decode(lt);
+      if (sym < 256) { grow(1); out[n++] = sym; }
+      else if (sym === 256) break;
+      else {
+        const li = sym - 257; const len = LBASE[li] + bits(LEXT[li]);
+        const ds = decode(dt); const dist = DBASE[ds] + bits(DEXT[ds]);
+        grow(len);
+        for (let i = 0; i < len; i++) { out[n] = out[n - dist]; n++; }
+      }
+    }
+  } while (!last);
+  return out.subarray(0, n);
+}
+function decodeText(u8) {
+  if (u8[0] === 0xff && u8[1] === 0xfe) return new TextDecoder('utf-16le').decode(u8.subarray(2));
+  if (u8[0] === 0xfe && u8[1] === 0xff) return new TextDecoder('utf-16be').decode(u8.subarray(2));
+  return new TextDecoder('utf-8').decode(u8);
+}
+async function unzipMusicXML(u8) {
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  let e = -1;
+  for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { e = i; break; }
+  if (e < 0) throw new Error('压缩包已损坏');
+  const cnt = dv.getUint16(e + 10, true); let p = dv.getUint32(e + 16, true);
+  const entries = [];
+  for (let k = 0; k < cnt; k++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+    const nlen = dv.getUint16(p + 28, true), xlen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true);
+    const lho = dv.getUint32(p + 42, true);
+    const name = new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nlen));
+    entries.push({ name, method, csize, lho });
+    p += 46 + nlen + xlen + clen;
+  }
+  const read = async (en) => {
+    const q = en.lho, nlen = dv.getUint16(q + 26, true), xlen = dv.getUint16(q + 28, true);
+    const data = u8.subarray(q + 30 + nlen + xlen, q + 30 + nlen + xlen + en.csize);
+    if (en.method === 0) return data;
+    if (en.method === 8) return inflateRaw(data);
+    throw new Error('不支持的压缩方式');
+  };
+  let target = null;
+  const cont = entries.find((x) => x.name === 'META-INF/container.xml');
+  if (cont) {
+    const m = /full-path="([^"]+)"/.exec(decodeText(await read(cont)));
+    if (m) target = entries.find((x) => x.name === m[1]);
+  }
+  if (!target) target = entries.find((x) => !x.name.startsWith('META-INF') && /\.(xml|musicxml)$/i.test(x.name));
+  if (!target) throw new Error('压缩包里没有找到乐谱');
+  return decodeText(await read(target));
+}
+
+/* ---------------- 乐理小工具 ---------------- */
+const MAJ_BY_FIFTHS = { '-7': 'Cb', '-6': 'Gb', '-5': 'Db', '-4': 'Ab', '-3': 'Eb', '-2': 'Bb', '-1': 'F', 0: 'C', 1: 'G', 2: 'D', 3: 'A', 4: 'E', 5: 'B', 6: 'F#', 7: 'C#' };
+const MIN_BY_FIFTHS = { '-6': 'Ebm', '-5': 'Bbm', '-4': 'Fm', '-3': 'Cm', '-2': 'Gm', '-1': 'Dm', 0: 'Am', 1: 'Em', 2: 'Bm', 3: 'F#m', 4: 'C#m', 5: 'G#m', 6: 'D#m' };
+function keyFromFifths(f, minor) {
+  f = clamp(Math.round(f) || 0, -7, 7);
+  return makeKey((minor && MIN_BY_FIFTHS[f]) || MAJ_BY_FIFTHS[f]);
+}
+const TS_CACHE = {};
+function makeTS(n, d) {
+  const name = `${n}/${d}`;
+  if (TS_CACHE[name]) return TS_CACHE[name];
+  const comp = d === 8 && n % 3 === 0 && n >= 6;
+  const len = (n * 96) / d;
+  return (TS_CACHE[name] = { name, n, d, len, beat: comp ? 36 : 96 / d, strong: [0], comp });
+}
+const TYPE_CODE = { breve: 'w', whole: 'w', half: 'h', quarter: 'q', eighth: '8', '16th': '16', '32nd': '32', '64th': '64', '128th': '64' };
+const TYPE_TICKS = { breve: 192, whole: 96, half: 48, quarter: 24, eighth: 12, '16th': 6, '32nd': 3, '64th': 1.5, '128th': 0.75 };
+const ACC_XML = { sharp: '#', flat: 'b', natural: 'n', 'double-sharp': '##', 'sharp-sharp': '##', 'flat-flat': 'bb', 'natural-sharp': '#', 'natural-flat': 'b' };
+// 按时值推算记谱（MusicXML 没写 <type> 时用）
+function codeFromTicks(t) {
+  for (const [v, c, dots] of [[144, 'w', 1], [96, 'w', 0], [72, 'h', 1], [48, 'h', 0], [36, 'q', 1], [24, 'q', 0], [18, '8', 1], [12, '8', 0], [9, '16', 1], [6, '16', 0], [3, '32', 0]]) if (t >= v - 1e-6) return { code: c, dots };
+  return { code: '32', dots: 0 };
+}
+// 根据调号算出每个音要不要标临时记号（MIDI 导入、或 MusicXML 没写 <accidental> 时用）
+function computeAccidentals(bars) {
+  for (const bar of bars) {
+    const sig = bar.key.sig;
+    for (const h of ['rh', 'lh']) {
+      const st = {};
+      const evs = bar[h].filter((e) => !e.rest).sort((a, b) => a.pos - b.pos);
+      for (const e of evs) for (const n of e.notes) {
+        const cur = n.d in st ? st[n.d] : sig[mod(n.d, 7)];
+        if (n.tieStop && n.a === cur) { n.acc = ''; continue; }
+        n.acc = n.a !== cur ? ACC[n.a] || '' : '';
+        st[n.d] = n.a;
+      }
+    }
+  }
+}
+
+/* ---------------- MusicXML ---------------- */
+const xKids = (el, name) => { const out = []; for (const c of el.children) if (c.localName === name) out.push(c); return out; };
+const xKid = (el, name) => { for (const c of el.children) if (c.localName === name) return c; return null; };
+const xTxt = (el, name, d) => { const c = el && xKid(el, name); return c ? c.textContent.trim() : d; };
+function clefName(c) {
+  if (!c) return null;
+  const sign = c.sign, line = c.line;
+  if (sign === 'F') return 'bass';
+  if (sign === 'C') return line === 4 ? 'tenor' : 'alto';
+  return 'treble';
+}
+function parsePart(partEl) {
+  let div = 1, keyF = 0, minor = false, tsN = 4, tsD = 4, staves = 1;
+  const clefs = {}; const out = []; let tempo = null;
+  for (const m of xKids(partEl, 'measure')) {
+    const M = { num: m.getAttribute('number'), implicit: m.getAttribute('implicit') === 'yes', notes: [], maxT: 0, fwd: false, bwd: 0, endNums: null, endStop: false };
+    let t = 0, lastStart = 0;
+    const tk = (x) => (parseFloat(x) || 0) * 24 / div;
+    for (const c of m.children) {
+      const nm = c.localName;
+      if (nm === 'attributes') {
+        const dv = xTxt(c, 'divisions'); if (dv) div = parseFloat(dv) || div;
+        const st = xTxt(c, 'staves'); if (st) staves = Math.max(staves, +st);
+        const k = xKid(c, 'key'); if (k && xKid(k, 'fifths')) { keyF = +xTxt(k, 'fifths', 0); minor = xTxt(k, 'mode', 'major') === 'minor'; }
+        const tm = xKid(c, 'time');
+        if (tm && xKid(tm, 'beats')) { const b = xTxt(tm, 'beats', '4').split('+').reduce((a, x) => a + (+x || 0), 0); const bt = +xTxt(tm, 'beat-type', '4'); if (b > 0 && bt > 0) { tsN = b; tsD = bt; } }
+        for (const cl of xKids(c, 'clef')) {
+          const no = +(cl.getAttribute('number') || 1);
+          const info = { sign: xTxt(cl, 'sign', 'G'), line: +xTxt(cl, 'line', 0), oct: +xTxt(cl, 'clef-octave-change', 0) };
+          (clefs[no] = clefs[no] || []).push({ t, info });   // 小节中间换谱号：从下一小节起生效
+        }
+      } else if (nm === 'backup') { t -= tk(xTxt(c, 'duration', 0)); if (t < 0) t = 0; }
+      else if (nm === 'forward') { t += tk(xTxt(c, 'duration', 0)); M.maxT = Math.max(M.maxT, t); }
+      else if (nm === 'note') {
+        if (xKid(c, 'grace') || xKid(c, 'cue')) continue;
+        const chord = !!xKid(c, 'chord');
+        const dur = tk(xTxt(c, 'duration', 0));
+        const start = chord ? lastStart : t;
+        if (!chord) { lastStart = t; t += dur; M.maxT = Math.max(M.maxT, t); }
+        if (c.getAttribute('print-object') === 'no') continue;   // 看不见的音/休止符：当作空档
+        const restEl = xKid(c, 'rest');
+        const N = { start, dur, chord, staff: +xTxt(c, 'staff', 1), voice: xTxt(c, 'voice', '1'), rest: !!restEl };
+        const ty = xTxt(c, 'type');
+        if (ty && TYPE_CODE[ty]) { N.code = TYPE_CODE[ty]; N.typeTicks = TYPE_TICKS[ty]; } else { const cf = codeFromTicks(dur); N.code = cf.code; N.dots = cf.dots; N.typeTicks = dur; }
+        if (N.dots === undefined) N.dots = xKids(c, 'dot').length;
+        N.normTicks = N.typeTicks;
+        N.typeTicks *= N.dots === 1 ? 1.5 : N.dots >= 2 ? 1.75 : 1;
+        if (restEl) {
+          N.mrest = restEl.getAttribute('measure') === 'yes';
+          const ds = xTxt(restEl, 'display-step'), dO = xTxt(restEl, 'display-octave');
+          if (ds && dO) N.restKey = ds.toLowerCase() + '/' + dO;
+        } else {
+          const p = xKid(c, 'pitch'); if (!p) continue;    // 打击乐等无音高的音
+          const step = xTxt(p, 'step', 'C').toLowerCase(), oct = +xTxt(p, 'octave', 4), alt = Math.round(parseFloat(xTxt(p, 'alter', 0)) || 0);
+          N.d = LETTERS.indexOf(step) + 7 * oct; N.a = alt;
+          const ac = xTxt(c, 'accidental'); N.acc = ac === undefined ? undefined : ACC_XML[ac] ?? '';
+          for (const ti of xKids(c, 'tie')) { if (ti.getAttribute('type') === 'start') N.tieStart = true; if (ti.getAttribute('type') === 'stop') N.tieStop = true; }
+          const stem = xTxt(c, 'stem'); if (stem === 'up' || stem === 'down') N.stem = stem;
+        }
+        const tmod = xKid(c, 'time-modification');
+        if (tmod) { N.tupN = +xTxt(tmod, 'actual-notes', 3); N.tupM = +xTxt(tmod, 'normal-notes', 2); const nt = xTxt(tmod, 'normal-type'); if (nt && TYPE_TICKS[nt]) N.normTicks = TYPE_TICKS[nt]; }
+        const nots = xKid(c, 'notations');
+        if (nots) {
+          for (const tp of xKids(nots, 'tuplet')) { if (tp.getAttribute('type') === 'start') N.tupStart = true; if (tp.getAttribute('type') === 'stop') N.tupStop = true; }
+          const tech = xKid(nots, 'technical'); const fg = tech && xTxt(tech, 'fingering'); if (fg) N.finger = fg;
+          for (const td of xKids(nots, 'tied')) { if (td.getAttribute('type') === 'start') N.tieStart = true; if (td.getAttribute('type') === 'stop') N.tieStop = true; }
+        }
+        M.notes.push(N);
+      } else if (nm === 'barline') {
+        const bs = xTxt(c, 'bar-style', '');
+        if ((c.getAttribute('location') || 'right') === 'right' && /light-light|light-heavy|heavy-light|heavy-heavy/.test(bs)) M.dbl = true;
+        if (xKid(c, 'segno')) M.segno = true;
+        if (xKid(c, 'coda')) M.coda = true;
+        const rp = xKid(c, 'repeat');
+        if (rp) { if (rp.getAttribute('direction') === 'forward') M.fwd = true; else M.bwd = +(rp.getAttribute('times') || 2); }
+        const en = xKid(c, 'ending');
+        if (en) {
+          const ty = en.getAttribute('type');
+          if (ty === 'start') M.endNums = (en.getAttribute('number') || '1').split(/[,\s]+/).map(Number).filter((x) => x > 0);
+          else M.endStop = true;
+        }
+      } else if (nm === 'direction' || nm === 'sound') {
+        const snd = nm === 'sound' ? c : xKid(c, 'sound');
+        // 跳转记号：D.C. / D.S. / Fine / To Coda / Coda / Segno（优先看 <sound>，再看文字）
+        if (snd) {
+          if (snd.getAttribute('dacapo') === 'yes') M.dc = true;
+          if (snd.getAttribute('dalsegno')) M.ds = true;
+          if (snd.getAttribute('fine')) M.fine = true;
+          if (snd.getAttribute('tocoda')) M.tocoda = true;
+          if (snd.getAttribute('coda')) M.coda = true;
+          if (snd.getAttribute('segno')) M.segno = true;
+        }
+        if (nm === 'direction') {
+          if (c.getElementsByTagName('segno').length) M.segno = true;
+          if (c.getElementsByTagName('coda').length) M.codaSign = true;
+          for (const w of c.getElementsByTagName('words')) {
+            const t = w.textContent.replace(/\s+/g, ' ').trim();
+            if (/^d\.?\s?c\.?(\s|$)|da\s*capo/i.test(t)) M.dc = true;
+            else if (/^d\.?\s?s\.?(\s|$)|dal\s*segno/i.test(t)) M.ds = true;
+            else if (/to\s*coda/i.test(t)) M.tocoda = true;
+            else if (/^fine\.?$/i.test(t)) M.fine = true;
+          }
+        }
+        if (tempo == null && snd && snd.getAttribute('tempo')) tempo = parseFloat(snd.getAttribute('tempo'));
+        if (tempo == null && nm === 'direction') {
+          const met = c.querySelector('metronome');
+          if (met && xKid(met, 'per-minute')) { const bu = xTxt(met, 'beat-unit', 'quarter'); const dots = xKids(met, 'beat-unit-dot').length; tempo = parseFloat(xTxt(met, 'per-minute')) * (TYPE_TICKS[bu] || 24) * (dots ? 1.5 : 1) / 24; }
+        }
+      }
+    }
+    M.ts = makeTS(tsN, tsD); M.keyF = keyF; M.minor = minor;
+    M.clefStart = {}; M.clefNext = {};
+    for (const no of Object.keys(clefs)) {
+      const arr = clefs[no]; const atStart = arr.filter((x) => x.t <= 1e-6);
+      if (atStart.length) M.clefStart[no] = atStart[atStart.length - 1].info;
+      if (arr.length) M.clefNext[no] = arr[arr.length - 1].info;
+      clefs[no] = [{ t: 0, info: arr[arr.length - 1].info }];
+    }
+    out.push(M);
+  }
+  return { measures: out, staves, tempo };
+}
+// 反复记号展开：按实际演奏顺序排列小节。
+// 支持：反复记号、1/2 房子、D.C. / D.S.（跳回后不再反复，遇到房子走最后一个）、Fine、To Coda → Coda。
+// 没有起始反复记号时，回到前一条双小节线（或前一个反复结束处、全曲开头）。
+function unrollOrder(R) {
+  const n = R.length;
+  const segno = R.findIndex((r) => r.segno);
+  // Coda：明确的 tocoda 标记 + coda 目标；只有 coda 符号时，第一个当 “To Coda”，最后一个当目标
+  const codaMarks = []; R.forEach((r, i) => { if (r.coda || r.codaSign) codaMarks.push(i); });
+  let tocoda = new Set(R.map((r, i) => (r.tocoda ? i : -1)).filter((i) => i >= 0));
+  let codaT = -1;
+  if (tocoda.size) codaT = codaMarks.filter((i) => i > Math.max(...tocoda)).pop() ?? -1;
+  else if (codaMarks.length >= 2) { tocoda = new Set([codaMarks[0]]); codaT = codaMarks[codaMarks.length - 1]; }
+  const order = []; let i = 0, start = 0, pass = 1, jumped = false, after = false, guard = 0;
+  let dcUsed = false, dsUsed = false;
+  const done = new Map();
+  while (i < n && guard++ < 20000) {
+    const r = R[i];
+    if (r.fwd && !jumped && !after) { start = i; pass = 1; }
+    jumped = false;
+    if (r.endNums) {
+      let j = i; while (j < n - 1 && !R[j].endStop) j++;
+      const skip = after ? !!(R[j + 1] && R[j + 1].endNums) : !r.endNums.includes(pass);
+      if (skip) { i = j + 1; continue; }
+    }
+    order.push(i);
+    if (after && r.fine) break;
+    if (after && tocoda.has(i) && codaT > i) { i = codaT; continue; }
+    if (r.bwd && !after) {
+      const c = done.get(i) || 0;
+      if (c < r.bwd - 1) { done.set(i, c + 1); pass++; i = start; jumped = true; continue; }
+      done.set(i, 0); pass = 1; start = i + 1;
+    }
+    if (r.dc && !dcUsed) { dcUsed = true; after = true; i = 0; continue; }
+    if (r.ds && !dsUsed && segno >= 0) { dsUsed = true; after = true; i = segno; continue; }
+    if (r.dbl && !r.bwd && !after) { start = i + 1; pass = 1; }
+    i++;
+  }
+  return order;
+}
+function parseMusicXML(text) {
+  const doc = new DOMParser().parseFromString(text, 'application/xml');
+  if (doc.getElementsByTagName('parsererror').length) throw new Error('文件内容不是有效的 MusicXML');
+  const root = doc.documentElement;
+  if (root.localName === 'score-timewise') throw new Error('暂不支持 timewise 格式的 MusicXML，请导出为普通的 MusicXML');
+  if (root.localName !== 'score-partwise') throw new Error('不是 MusicXML 乐谱');
+  const wt = root.querySelector('work > work-title'), mt = root.querySelector('movement-title');
+  let title = (wt && wt.textContent.trim()) || (mt && mt.textContent.trim()) || '';
+  const parts = xKids(root, 'part').map((p) => parsePart(p));
+  const hasNotes = (P) => P.measures.some((m) => m.notes.some((n) => !n.rest));
+  // 选声部：优先用有两行谱表的钢琴声部；否则按谱号把各声部分给右手（高音）和左手（低音）
+  let assign = [];
+  const piano = parts.findIndex((P) => P.staves >= 2 && hasNotes(P));
+  if (piano >= 0) assign.push({ pi: piano, hand: (st) => (st >= 2 ? 'lh' : 'rh') });
+  else {
+    parts.forEach((P, pi) => {
+      if (!hasNotes(P)) return;
+      const c = P.measures[0] && (P.measures[0].clefStart[1] || P.measures[0].clefNext[1]);
+      let hand = 'rh';
+      if (c && (c.sign === 'F' || (c.sign === 'G' && c.oct < 0))) hand = 'lh';
+      else if (c && c.sign === 'C') { const ps = []; P.measures.forEach((m) => m.notes.forEach((n) => { if (!n.rest) ps.push(midiOf(n.d, n.a)); })); hand = ps.reduce((a, x) => a + x, 0) / Math.max(1, ps.length) >= 60 ? 'rh' : 'lh'; }
+      assign.push({ pi, hand: () => hand });
+    });
+  }
+  if (!assign.length) throw new Error('乐谱里没有找到音符');
+  const P0 = parts[assign[0].pi];
+  const nM = Math.min(...assign.map((a) => parts[a.pi].measures.length));
+  const order = unrollOrder(P0.measures.slice(0, nM));
+  const tempo = assign.map((a) => parts[a.pi].tempo).find((x) => x) || parts.map((p) => p.tempo).find((x) => x) || 80;
+  const hasAccTags = /<accidental[\s>]/.test(text);
+  // 各小节当前的谱号（按右手、左手）
+  const clefFor = (a, mi, staff) => {
+    const ms = parts[a.pi].measures;
+    for (let j = mi; j >= 0; j--) { if (j < mi && ms[j].clefNext[staff]) return ms[j].clefNext[staff]; if (ms[j].clefStart[staff]) return ms[j].clefStart[staff]; }
+    return null;
+  };
+  const bars = [];
+  const openTies = new Map();
+  order.forEach((mi, k) => {
+    const M0 = P0.measures[mi];
+    let len = M0.ts.len;
+    const maxT = Math.max(...assign.map((a) => parts[a.pi].measures[mi].maxT));
+    if (M0.implicit && maxT > 0 && maxT < len) len = maxT;
+    if (maxT > len + 1e-6) len = maxT;
+    const bar = { num: k + 1, origNum: M0.num, gidx: k, len, ts: M0.ts, key: keyFromFifths(M0.keyF, M0.minor), clef: { rh: 'treble', lh: 'bass' }, rh: [], lh: [] };
+    if (piano >= 0) {
+      const c1 = clefName(clefFor(assign[0], mi, 1)), c2 = clefName(clefFor(assign[0], mi, 2));
+      bar.clef = { rh: c1 === 'bass' ? 'bass' : 'treble', lh: c2 === 'treble' ? 'treble' : 'bass' };
+    }
+    // 声部编号（每只手内部按出现顺序排）
+    const vkeys = { rh: [], lh: [] };
+    const lastEv = new Map(), tupOpen = new Map();
+    assign.forEach((a, ai) => {
+      const M = parts[a.pi].measures[mi];
+      for (const N of M.notes) {
+        const hand = a.hand(N.staff);
+        const vk = ai + ':' + N.staff + ':' + N.voice;
+        if (!vkeys[hand].includes(vk)) vkeys[hand].push(vk);
+        if (N.chord && lastEv.has(vk) && !N.rest) {
+          const e = lastEv.get(vk);
+          if (!e.rest && Math.abs(e.pos - N.start) < 1e-6) { e.notes.push(mkNote(N)); continue; }
+        }
+        const e = { pos: N.start, dur: N.dur, rest: N.rest, code: N.code, dots: N.dots, notes: N.rest ? [] : [mkNote(N)], vk, hand };
+        if (N.restKey) e.restKey = N.restKey;
+        if (N.stem) e.stem = N.stem;
+        if (N.finger) e.finger = N.finger;
+        if (N.rest && (N.mrest || (N.dur >= len - 1e-6 && N.code === 'w'))) { e.full = true; e.dur = len; }
+        if (N.tupN && N.tupN !== N.tupM) {
+          let g = tupOpen.get(vk);
+          // 一组三连音（或其他连音）：按记谱时值累加，满 actual × normal-type 就结束
+          if (!g || N.tupStart) { g = { id: vk + '@' + N.start, sum: 0, target: N.normTicks * N.tupN }; tupOpen.set(vk, g); }
+          e.tup = g.id; e.tupN = N.tupN; e.tupM = N.tupM;
+          g.sum += N.typeTicks;
+          if (N.tupStop || g.sum >= g.target - 1e-6) tupOpen.delete(vk);
+        } else tupOpen.delete(vk);
+        bar[hand].push(e); lastEv.set(vk, e);
+      }
+    });
+    for (const h of ['rh', 'lh']) {
+      for (const e of bar[h]) { e.v = vkeys[h].indexOf(e.vk); delete e.vk; delete e.hand; }
+      bar[h].sort((x, y) => x.pos - y.pos || x.v - y.v);
+      if (!bar[h].length) bar[h].push({ pos: 0, dur: len, rest: true, full: true, code: 'w', dots: 0, notes: [], v: 0 });
+      for (const e of bar[h]) if (!e.rest) e.notes.sort((x, y) => x.d - y.d);
+    }
+    // 连音线：把前后两个音连起来
+    for (const h of ['rh', 'lh']) for (const e of bar[h]) {
+      if (e.rest) continue;
+      e.notes.forEach((n, i) => {
+        const key = h + ':' + n.midi;
+        if (n.tieStop) {
+          const o = openTies.get(key);
+          if (o && o.k >= k - 1) { o.n.tieTo = { e, i }; n.tieFrom = { e: o.e, i: o.i }; openTies.delete(key); }
+          else n.tieStop = false;
+        }
+        if (n.tieStart) openTies.set(key, { e, i, n, k });
+      });
+    }
+    for (const [key, o] of openTies) if (o.k < k) { o.n.tieStart = false; openTies.delete(key); }
+    bars.push(bar);
+  });
+  for (const [, o] of openTies) o.n.tieStart = false;
+  finishTies(bars);
+  if (!hasAccTags) computeAccidentals(bars);
+  if (!title) title = '';
+  return { title, bpm: Math.round(clamp(tempo, 30, 240)), bars };
+}
+function mkNote(N) {
+  const n = { d: N.d, a: N.a, midi: midiOf(N.d, N.a) };
+  if (N.acc !== undefined) n.acc = N.acc;
+  if (N.tieStart) n.tieStart = true;
+  if (N.tieStop) n.tieStop = true;
+  return n;
+}
+// 连音线的头一个音：发声时值 = 整条连线的总长
+function finishTies(bars) {
+  for (const b of bars) for (const h of ['rh', 'lh']) for (const e of b[h]) {
+    if (e.rest) continue;
+    for (const n of e.notes) {
+      if (!n.tieTo || n.tieStop) { if (!n.tieTo) delete n.tieStart; continue; }
+      let dur = e.dur, cur = n, guard = 0;
+      while (cur.tieTo && guard++ < 64) { const t = cur.tieTo; dur += t.e.dur; cur = t.e.notes[t.i]; }
+      n.tieDur = dur;
+    }
+  }
+}
+
+/* ---------------- MIDI ---------------- */
+function parseMidi(u8) {
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  const tag = (p) => String.fromCharCode(u8[p], u8[p + 1], u8[p + 2], u8[p + 3]);
+  if (tag(0) !== 'MThd') throw new Error('不是 MIDI 文件');
+  const hlen = dv.getUint32(4), ntr = dv.getUint16(10), div = dv.getInt16(12);
+  if (div <= 0) throw new Error('不支持 SMPTE 计时的 MIDI 文件');
+  let p = 8 + hlen;
+  const notes = []; let tempo = null, ts = null, key = null; const names = []; const tempos = []; const tsList = [], keyList = [];
+  let tr = 0;
+  while (p + 8 <= u8.length && tr < ntr) {
+    const len = dv.getUint32(p + 4);
+    if (tag(p) !== 'MTrk') { p += 8 + len; continue; }
+    let q = p + 8; const end = Math.min(u8.length, q + len); p = q + len;
+    let t = 0, run = 0; const open = new Map();
+    const vlq = () => { let v = 0, b; do { b = u8[q++]; v = v * 128 + (b & 0x7f); } while (b & 0x80 && q < end); return v; };
+    while (q < end) {
+      t += vlq();
+      let st = u8[q];
+      if (st & 0x80) { q++; if (st < 0xf0) run = st; } else st = run;
+      if (st === 0xff) {
+        const type = u8[q++]; const l = vlq(); const d = u8.subarray(q, q + l); q += l;
+        if (type === 0x51 && l >= 3) { const us = (d[0] << 16) | (d[1] << 8) | d[2]; tempos.push({ tick: t, us }); if (tempo === null) tempo = us; }
+        else if (type === 0x58 && l >= 2) { const x = { tick: t, n: d[0], d: 1 << d[1] }; tsList.push(x); if (!ts) ts = x; }
+        else if (type === 0x59 && l >= 2) { const x = { tick: t, sf: (d[0] << 24) >> 24, mi: d[1] }; keyList.push(x); if (!key) key = x; }
+        else if (type === 0x03) names[tr] = new TextDecoder().decode(d);
+        continue;
+      }
+      if (st === 0xf0 || st === 0xf7) { const l = vlq(); q += l; continue; }
+      const hi = st & 0xf0, ch = st & 15;
+      const d1 = u8[q++]; const d2 = hi === 0xc0 || hi === 0xd0 ? 0 : u8[q++];
+      const k = ch * 128 + d1;
+      if (hi === 0x90 && d2 > 0) { if (!open.has(k)) open.set(k, []); open.get(k).push(t); }
+      else if (hi === 0x80 || (hi === 0x90 && d2 === 0)) {
+        const a = open.get(k);
+        if (a && a.length) { const s = a.shift(); if (t > s) notes.push({ start: s / div, end: t / div, t0: s, t1: t, midi: d1, track: tr, ch }); }
+      }
+    }
+    tr++;
+  }
+  tempos.sort((a, b) => a.tick - b.tick); tsList.sort((a, b) => a.tick - b.tick); keyList.sort((a, b) => a.tick - b.tick);
+  return { notes, tempo, ts, key, names, tempos, div, tsList, keyList };
+}
+// MIDI tick → 秒（按速度表）
+function midiSecFn(Mi) {
+  const tm = Mi.tempos.length ? Mi.tempos : [{ tick: 0, us: 500000 }];
+  const seg = []; let sec = 0, lt = 0, us = tm[0].tick === 0 ? tm[0].us : 500000;
+  for (const x of tm) { sec += ((x.tick - lt) * us) / 1e6 / Mi.div; seg.push({ tick: x.tick, sec, us: x.us }); lt = x.tick; us = x.us; }
+  return (tick) => { let k = 0; while (k + 1 < seg.length && seg[k + 1].tick <= tick) k++; const g = seg[k]; if (!g || tick < g.tick) return (tick * 500000) / 1e6 / Mi.div; return g.sec + ((tick - g.tick) * g.us) / 1e6 / Mi.div; };
+}
+const MAJ_PCS = [0, 2, 4, 5, 7, 9, 11];
+function estimateFifths(notes) {
+  const w = new Array(12).fill(0);
+  for (const n of notes) w[n.midi % 12] += n.end - n.start;
+  let best = 0, bs = -1;
+  for (let f = -6; f <= 6; f++) {
+    const tonic = mod(f * 7, 12);
+    const sc = MAJ_PCS.reduce((a, x) => a + w[(tonic + x) % 12], 0) - Math.abs(f) * 1e-3;
+    if (sc > bs) { bs = sc; best = f; }
+  }
+  return best;
+}
+// MIDI 音高 → 谱上的音名（按调号决定用升号还是降号）
+function spellMidi(m, key) {
+  const pc = mod(m, 12);
+  let best = null;
+  for (let l = 0; l < 7; l++) for (const a of [0, -1, 1]) {
+    if (mod(STEP[l] + a, 12) !== pc) continue;
+    let score = a === key.sig[l] ? 0 : a === 0 ? 1 : (key.f >= 0 ? a > 0 : a < 0) ? 1.5 : 2.5;
+    if (key.f === 0 && (pc === 3 || pc === 10) && a === -1) score = 1.2;   // C 大调里 Eb、Bb 比 D#、A# 常见
+    if (!best || score < best.s) best = { l, a, s: score };
+  }
+  const oct = Math.round((m - STEP[best.l] - best.a) / 12) - 1;
+  const d = best.l + 7 * oct;
+  return { d, a: best.a, midi: m };
+}
+const REG_VALS = [[96, 'w', 0, 96], [72, 'h', 1, 24], [48, 'h', 0, 24], [36, 'q', 1, 12], [24, 'q', 0, 12], [18, '8', 1, 6], [12, '8', 0, 6], [9, '16', 1, 3], [6, '16', 0, 3], [3, '32', 0, 3]];
+// 分左右手：POP909（MELODY / BRIDGE / PIANO 三轨）右手旋律、左手伴奏；
+// 其他：两个以上音轨按音轨（平均音高高的是右手），单轨按声道或中央 C 分
+function assignHands(notes, names) {
+  const nm = (n) => ((names && names[n.track]) || '').toUpperCase();
+  if (notes.some((n) => nm(n) === 'MELODY') && notes.some((n) => nm(n) === 'PIANO')) {
+    const mel = notes.filter((n) => nm(n) === 'MELODY');
+    const keep = notes.filter((n) => {
+      const t = nm(n);
+      if (t === 'MELODY') { n.hand = 'rh'; return true; }
+      if (t === 'PIANO') { n.hand = 'lh'; return true; }
+      // 副旋律：只在主旋律休息的地方放进右手
+      n.hand = 'rh';
+      return !mel.some((m) => m.start < n.end - 0.05 && m.end > n.start + 0.05);
+    });
+    return keep;
+  }
+  const tracks = [...new Set(notes.map((n) => n.track))];
+  const avg = (arr) => arr.reduce((a, n) => a + n.midi, 0) / Math.max(1, arr.length);
+  if (tracks.length >= 2) {
+    const av = tracks.map((t) => ({ t, a: avg(notes.filter((n) => n.track === t)) })).sort((x, y) => y.a - x.a);
+    const rhSet = new Set(tracks.length === 2 ? [av[0].t] : av.filter((x) => x.a >= 60).map((x) => x.t));
+    if (!rhSet.size) rhSet.add(av[0].t);
+    notes.forEach((n) => { n.hand = rhSet.has(n.track) ? 'rh' : 'lh'; });
+  } else {
+    const chans = [...new Set(notes.map((n) => n.ch))];
+    if (chans.length === 2) { const a0 = avg(notes.filter((n) => n.ch === chans[0])), a1 = avg(notes.filter((n) => n.ch === chans[1])); const rc = a0 >= a1 ? chans[0] : chans[1]; notes.forEach((n) => { n.hand = n.ch === rc ? 'rh' : 'lh'; }); }
+    else notes.forEach((n) => { n.hand = n.midi >= 60 ? 'rh' : 'lh'; });
+  }
+  return notes;
+}
+// 普通 MIDI 文件
+function midiToPiece(Mi, fileName) {
+  let notes = assignHands(Mi.notes.filter((n) => n.ch !== 9), Mi.names);
+  if (!notes.length) throw new Error('MIDI 文件里没有钢琴音符');
+  // 整体偏移：有的 MIDI 为了对齐录音，所有音都往后挪了一点；找出偏移量，让音落回十六分音符格点
+  const bins = new Array(48).fill(0);
+  for (const n of notes) bins[Math.round(mod(n.start, 1) * 48) % 48]++;
+  let off = 0, best = -1;
+  for (let o = 0; o < 12; o++) { const sc = [0, 12, 24, 36].reduce((a, k) => a + bins[(o + k) % 48] + 0.5 * (bins[(o + k + 47) % 48] + bins[(o + k + 1) % 48]), 0); if (sc > best) { best = sc; off = o; } }
+  const base = [0, 12, 24, 36].reduce((a, k) => a + bins[k] + 0.5 * (bins[(k + 47) % 48] + bins[k + 1]), 0);
+  const shift = best > base * 1.3 && best > notes.length * 0.5 ? off / 48 : 0;
+  if (shift) for (const n of notes) { n.start -= shift; n.end -= shift; }
+  // 拍号：没有或是 1/4 这种不可信的，按 4/4，并用低音的位置估计每小节第一拍
+  let tsIn = Mi.ts && Mi.ts.n > 1 && [2, 4, 8].includes(Mi.ts.d) ? Mi.ts : null;
+  let phase = 0;
+  const TSo = tsIn ? makeTS(tsIn.n, tsIn.d) : makeTS(4, 4);
+  if (!tsIn) {
+    const sc = [0, 0, 0, 0];
+    const lows = new Map();
+    for (const n of notes) if (n.hand === 'lh') { const q = Math.round(n.start); if (!lows.has(q) || lows.get(q) > n.midi) lows.set(q, n.midi); }
+    for (const [q, m] of lows) sc[mod(q, 4)] += m < 52 ? 2 : 1;
+    phase = sc.indexOf(Math.max(...sc));
+  }
+  // 量化：每拍单独判断用十六分音符格还是三连音格
+  const allowTrip = TSo.d === 4 || TSo.d === 2;
+  const byBeat = new Map();
+  for (const n of notes) { const b = Math.floor(n.start + 1e-6); if (!byBeat.has(b)) byBeat.set(b, []); byBeat.get(b).push(n.start - b); }
+  const trip = new Set();
+  if (allowTrip) for (const [b, fs] of byBeat) {
+    const e4 = fs.reduce((a, f) => a + Math.abs(f - Math.round(f * 4) / 4), 0), e3 = fs.reduce((a, f) => a + Math.abs(f - Math.round(f * 3) / 3), 0);
+    if (fs.some((f) => Math.abs(f * 3 - Math.round(f * 3)) < 0.06 && Math.abs(f * 4 - Math.round(f * 4)) > 0.15) && e3 < e4 * 0.6) trip.add(b);
+  }
+  const snap = (x) => { const b = Math.floor(x + 1e-6); const G = trip.has(b) ? 3 : 4; return Math.round((b + Math.round((x - b) * G) / G) * 24); };
+  for (const n of notes) { n.s = snap(n.start); n.e = snap(n.end); if (n.e <= n.s) n.e = n.s + (trip.has(Math.floor(n.s / 24)) ? 8 : 6); }
+  notes = notes.filter((n) => n.e > 0); notes.forEach((n) => { if (n.s < 0) n.s = 0; });
+  const fifths = Mi.key ? Mi.key.sf : estimateFifths(notes);
+  const key = keyFromFifths(fifths, Mi.key ? Mi.key.mi === 1 : false);
+  // 小节：弱起（phase 拍）+ 等长小节
+  const lastEnd = Math.max(...notes.map((n) => n.e));
+  const defs = []; let x = 0;
+  const pk = (phase * 24) % TSo.len;
+  if (pk > 0) { defs.push({ start: 0, len: pk, ts: TSo }); x = pk; }
+  while (x < lastEnd) { defs.push({ start: x, len: TSo.len, ts: TSo }); x += TSo.len; }
+  const bars = notesToBars(notes, defs, key, (t) => trip.has(Math.floor(t / 24)));
+  const bpm = Mi.tempo ? 60e6 / Mi.tempo : 100;
+  return { title: (fileName || '').replace(/\.[^.]+$/, ''), bpm: Math.round(clamp(bpm, 30, 240)), bars };
+}
+// POP909：用数据集自带的节拍文件（beat_midi.txt）对齐、分小节
+function pop909ToPiece(Mi, beatText, meta) {
+  const rows = beatText.split(/\n/).map((l) => l.trim().split(/\s+/).map(Number)).filter((r) => r.length >= 3 && isFinite(r[0]));
+  if (rows.length < 8) throw new Error('节拍文件内容不对');
+  const bt = rows.map((r) => r[0]);
+  const sec = midiSecFn(Mi);
+  const pos = (x) => {
+    let i = 0, hi = bt.length - 1;
+    if (x <= bt[0]) return (x - bt[0]) / (bt[1] - bt[0]);
+    if (x >= bt[hi]) return hi + (x - bt[hi]) / (bt[hi] - bt[hi - 1]);
+    while (i < hi) { const m = (i + hi + 1) >> 1; if (bt[m] <= x) i = m; else hi = m - 1; }
+    return i + (x - bt[i]) / (bt[i + 1] - bt[i]);
+  };
+  const trip = meta.F === 3;
+  const rowT = trip ? 36 : 24, sub = trip ? 3 : 4;
+  let notes = assignHands(Mi.notes.filter((n) => n.ch !== 9), Mi.names);
+  for (const n of notes) {
+    const a = pos(sec(n.t0)), b = pos(sec(n.t1));
+    n.s = Math.round(Math.round(a * sub) * rowT / sub); n.e = Math.round(Math.round(b * sub) * rowT / sub);
+    if (n.e <= n.s) n.e = n.s + rowT / sub;
+  }
+  notes = notes.filter((n) => n.s >= 0);
+  // 小节：第三列为 1 的是每小节第一拍
+  const db = rows.map((r, i) => (r[2] === 1 ? i : -1)).filter((i) => i >= 0);
+  const tsFor = (r) => (trip ? makeTS(r * 3, 8) : makeTS(r, 4));
+  const defs = [];
+  const add = (r0, r) => {
+    if (r <= 0) return;
+    if (!trip && (r === 6 || r === 8)) { add(r0, r / 2); add(r0 + r / 2, r / 2); return; }
+    defs.push({ start: r0 * rowT, len: r * rowT, ts: tsFor(r) });
+  };
+  // 弱起：比一个完整小节长时，前面放零头，后面是完整小节
+  const addPickup = (r, unit) => { const head = r % unit; if (head) add(0, head); for (let k = head; k < r; k += unit) add(k, unit); };
+  const gaps = {}; for (let k = 1; k < db.length; k++) gaps[db[k] - db[k - 1]] = (gaps[db[k] - db[k - 1]] || 0) + 1;
+  const common = +Object.entries(gaps).sort((a, b) => b[1] - a[1])[0][0] || 4;
+  if (db.length && db[0] > 0) addPickup(db[0], !trip && (common === 6 || common === 8) ? common / 2 : common);
+  for (let k = 0; k < db.length; k++) add(db[k], (k + 1 < db.length ? db[k + 1] : db[k] + common) - db[k]);
+  const lastEnd = Math.max(...notes.map((n) => n.e));
+  let x = defs.length ? defs[defs.length - 1].start + defs[defs.length - 1].len : 0;
+  while (x < lastEnd) { add(x / rowT, common); x = defs[defs.length - 1].start + defs[defs.length - 1].len; }
+  // 弱起小节沿用常用拍号的名字
+  if (defs.length > 1 && db[0] > 0) defs[0].ts = defs[1].ts;
+  const key = keyFromFifths(estimateFifths(notes), false);
+  const bars = notesToBars(notes, defs, key, () => false);
+  const rs = []; for (let k = 1; k < bt.length; k++) rs.push(bt[k] - bt[k - 1]);
+  rs.sort((a, b) => a - b);
+  const rowSec = rs[rs.length >> 1] || 0.5;
+  const bpm = (60 / rowSec) * (trip ? 1.5 : 1);
+  return { title: meta.name, bpm: Math.round(clamp(bpm, 30, 240)), bars };
+}
+// POP909-CL：已经量化、校正过小节线、带拍号和调号（含转调、变拍）。速度用原版 POP909 节拍文件换算
+function pop909clToPiece(Mi, beatText, meta) {
+  const q24 = (tick) => (tick / Mi.div) * 24;
+  let notes = assignHands(Mi.notes.filter((n) => n.ch !== 9 && !/CHORD/i.test(Mi.names[n.track] || '')), Mi.names);
+  if (!notes.length) throw new Error('文件里没有音符');
+  // 每拍判断是三连音格（8）还是普通格（3 的倍数）
+  // 只看起音（结束时间是演奏时值，比较乱）；四舍五入到最近的拍内位置
+  const byBeat = new Map();
+  for (const n of notes) { const x = q24(n.t0); const b = Math.floor(Math.round(x) / 24); if (!byBeat.has(b)) byBeat.set(b, []); byBeat.get(b).push(x - b * 24); }
+  const trip = new Set();
+  // 只在 x/4 拍的小节里认三连音（x/8 拍的小节线不一定落在四分音符拍点上）
+  const tsAt = (x) => { let r = null; for (const y of Mi.tsList) if ((y.tick / Mi.div) * 24 <= x + 1e-6) r = y; return r || { d: 4 }; };
+  for (const [b, fs] of byBeat) {
+    if (tsAt(b * 24).d !== 4) continue;
+    // 三连音：至少一个音正好（±1）落在 1/3 或 2/3 拍上，而且按三连音格对齐的总误差明显更小
+    const hit = fs.some((f) => Math.abs(f - 8) <= 1 || Math.abs(f - 16) <= 1);
+    const e6 = fs.reduce((a, f) => a + Math.abs(f - Math.round(f / 6) * 6), 0), e8 = fs.reduce((a, f) => a + Math.abs(f - Math.round(f / 8) * 8), 0);
+    if (hit && e8 < e6 * 0.6) trip.add(b);
+  }
+  // 记谱格：普通拍按十六分音符，三连音拍按三连音八分音符
+  const snap = (x) => { const b = Math.floor(Math.round(x) / 24); const g = trip.has(b) ? 8 : 6; return Math.round(x / g) * g; };
+  for (const n of notes) { n.s = snap(q24(n.t0)); n.e = snap(q24(n.t1)); if (n.e <= n.s) n.e = n.s + (trip.has(Math.floor(n.s / 24)) ? 8 : 6); }
+  // 小节线：从 0 开始，按拍号（含中途变拍）排
+  const tsl = (Mi.tsList.length ? Mi.tsList : [{ tick: 0, n: 4, d: 4 }]).map((x) => ({ at: Math.round(q24(x.tick)), ts: makeTS(x.n, x.d) }));
+  const kl = (Mi.keyList.length ? Mi.keyList : [{ tick: 0, sf: estimateFifths(notes), mi: 0 }]).map((x) => ({ at: Math.round(q24(x.tick)), key: keyFromFifths(x.sf, x.mi === 1) }));
+  const at = (list, x) => { let r = list[0]; for (const y of list) if (y.at <= x + 1e-6) r = y; return r; };
+  const lastEnd = Math.max(...notes.map((n) => n.e));
+  const defs = []; let x = 0, guard = 0;
+  while (x < lastEnd && guard++ < 5000) {
+    const ts = at(tsl, x).ts; let len = ts.len;
+    const nxt = tsl.find((y) => y.at > x + 1e-6); if (nxt && nxt.at < x + len) len = nxt.at - x;   // 变拍不在小节线上：截短这一小节
+    defs.push({ start: x, len, ts: len === ts.len ? ts : len % 24 === 0 ? makeTS(len / 24, 4) : len % 12 === 0 ? makeTS(len / 12, 8) : makeTS(Math.max(1, Math.round(len / 6)), 16), key: at(kl, x).key });
+    x += len;
+  }
+  const bars = notesToBars(notes, defs, defs[0].key, (t) => trip.has(Math.floor(t / 24)));
+  // 速度：原版节拍文件里一拍的秒数（一拍 = 480 个 CL tick）
+  let bpm = (60 * 480) / (0.6 * Mi.div);
+  const rows = (beatText || '').split(/\n/).map((l) => parseFloat(l)).filter((v) => isFinite(v));
+  if (rows.length > 8) { const rs = []; for (let k = 1; k < rows.length; k++) rs.push(rows[k] - rows[k - 1]); rs.sort((a, b) => a - b); const rowSec = rs[rs.length >> 1]; if (rowSec > 0.1) bpm = (60 * 480) / (rowSec * Mi.div); }
+  return { title: meta.name, bpm: Math.round(clamp(bpm, 30, 240)), bars };
+}
+// 公用：把（已量化的）音按小节摆好，拆成谱上能写的时值，加连音线、谱号、临时记号
+function notesToBars(notes, defs, key, tripBeat) {
+  const bars = defs.map((d, i) => ({ num: i + 1, gidx: i, len: d.len, ts: d.ts, key: d.key || key, clef: { rh: 'treble', lh: 'bass' }, rh: [], lh: [], _start: d.start }));
+  const starts = defs.map((d) => d.start);
+  const end = defs.length ? defs[defs.length - 1].start + defs[defs.length - 1].len : 0;
+  for (const hand of ['rh', 'lh']) {
+    const hn = notes.filter((n) => n.hand === hand && n.s < end);
+    const onsets = [...new Set(hn.map((n) => n.s))].sort((a, b) => a - b);
+    const segs = [];
+    onsets.forEach((o, i) => {
+      const nx = i + 1 < onsets.length ? onsets[i + 1] : end;
+      const ch = []; const seen = new Set();
+      for (const n of hn) if (n.s === o && !seen.has(n.midi)) { seen.add(n.midi); ch.push(n); }
+      let e = Math.min(nx, Math.max(...ch.map((n) => n.e)), end);
+      // 演奏录下来的音往往比记谱短一点：离下一个音只差一点点时，把它延长过去，免得谱上全是小休止符
+      const gap = nx - e;
+      if (nx < end && gap > 0 && (gap <= 6 || (gap <= 12 && gap <= (e - o) / 2))) e = nx;
+      segs.push({ s: o, e, midis: ch.map((n) => n.midi).sort((a, b) => a - b) });
+    });
+    const full = []; let cur = 0;
+    for (const sg of segs) { if (sg.s > cur) full.push({ s: cur, e: sg.s, rest: true }); full.push(sg); cur = sg.e; }
+    if (cur < end) full.push({ s: cur, e: end, rest: true });
+    for (const sg of full) placeSegment(bars, starts, sg, hand, key, tripBeat);
+  }
+  let lhTreble = false, rhBass = false;
+  for (const bar of bars) {
+    for (const h of ['rh', 'lh']) {
+      if (bar[h].every((e) => e.rest)) bar[h] = [{ pos: 0, dur: bar.len, rest: true, full: true, code: 'w', dots: 0, notes: [], v: 0 }];
+      bar[h].sort((a, b) => a.pos - b.pos);
+    }
+    // 谱号：左手整小节都在中央 C 以上时用高音谱号，右手整小节都很低时用低音谱号
+    const lm = bar.lh.flatMap((e) => e.notes.map((n) => n.midi)), rm = bar.rh.flatMap((e) => e.notes.map((n) => n.midi));
+    if (lm.length) lhTreble = Math.min(...lm) >= 60;
+    if (rm.length) rhBass = Math.max(...rm) <= 55;
+    bar.clef = { rh: rhBass ? 'bass' : 'treble', lh: lhTreble ? 'treble' : 'bass' };
+    delete bar._start;
+  }
+  finishTies(bars);
+  computeAccidentals(bars);
+  return bars;
+}
+// 把一段（可能跨小节、跨拍）拆成谱上写得出来的时值，用连音线连起来
+function placeSegment(bars, starts, sg, hand, key, tripBeat) {
+  const barAt = (x) => { let lo = 0, hi = starts.length - 1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (starts[m] <= x) lo = m; else hi = m - 1; } return lo; };
+  const cuts = new Set([sg.s, sg.e]);
+  for (let k = barAt(sg.s) + 1; k < starts.length && starts[k] < sg.e; k++) cuts.add(starts[k]);
+  for (let x = Math.ceil(sg.s / 24) * 24; x < sg.e; x += 24) if (tripBeat(x) || tripBeat(x - 1)) cuts.add(x);
+  const pts = [...cuts].sort((a, b) => a - b);
+  const pieces = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1]; if (b <= a) continue;
+    if (tripBeat(a) && (b - a) % 8 === 0) {
+      const bs = Math.floor(a / 24) * 24;
+      if (b - a === 24) pieces.push({ s: a, len: 24, code: 'q', dots: 0 });
+      else { let x = a; while (x < b) { const l = b - x >= 16 && (x - bs) % 8 === 0 ? 16 : 8; pieces.push({ s: x, len: l, code: l === 16 ? 'q' : '8', dots: 0, tup: hand + '@' + bs }); x += l; } }
+    } else {
+      let x = a;
+      const bst = starts[barAt(a)];
+      while (x < b - 1e-6) {
+        const inBar = x - bst;
+        const v = REG_VALS.find(([len, , , al]) => len <= b - x + 1e-6 && inBar % al === 0 && (len < 96 || inBar === 0)) || [Math.max(1, b - x), '32', 0, 1];
+        pieces.push({ s: x, len: v[0], code: v[1], dots: v[2] }); x += v[0];
+      }
+    }
+  }
+  let prev = null;
+  pieces.forEach((pc) => {
+    const bi = barAt(pc.s); const bar = bars[bi]; if (!bar) return;
+    const e = { pos: pc.s - starts[bi], dur: pc.len, rest: !!sg.rest, code: pc.code, dots: pc.dots, notes: [], v: 0 };
+    if (pc.tup) { e.tup = pc.tup; e.tupN = 3; e.tupM = 2; }
+    if (!sg.rest) {
+      e.notes = sg.midis.map((m) => spellMidi(m, bar.key || key));
+      if (prev) e.notes.forEach((n, j) => { n.tieStop = true; n.tieFrom = { e: prev, i: j }; prev.notes[j].tieStart = true; prev.notes[j].tieTo = { e, i: j }; });
+      prev = e;
+    }
+    bar[hand].push(e);
+  });
+}
+
+/* ---------------- 分页 ---------------- */
+function learnPages(piece) {
+  S.lineBudget = lineBudget();
+  const cw = $('score').clientWidth || window.innerWidth;
+  const nLines = cw < 700 && window.innerHeight > window.innerWidth ? 4 : 2;
+  const bars = piece.bars;
+  const est = bars.map((b) => {
+    const on = new Set(); let acc = 0;
+    for (const h of ['rh', 'lh']) for (const e of b[h]) { if (!e.rest) { on.add(e.pos); acc += e.notes.filter((n) => n.acc).length; } }
+    return (34 + 24 * on.size + 7 * acc) * 1.06 + 26;
+  });
+  const budget = S.lineBudget || 1550;
+  const pages = []; let i = 0;
+  while (i < bars.length) {
+    let per = 1;
+    for (const p of [4, 3, 2]) {
+      let ok = true;
+      for (let l = 0; l < nLines; l++) { const s = i + l * p; if (s >= bars.length) break; const sum = est.slice(s, s + p).reduce((a, x) => a + x, 0); if (150 + sum > budget) { ok = false; break; } }
+      if (ok) { per = p; break; }
+    }
+    const take = Math.min(per * nLines, bars.length - i);
+    pages.push(bars.slice(i, i + take)); i += take;
+  }
+  const exs = pages.map((pb, pi) => {
+    pb.forEach((b) => { b.sysIdx = undefined; b.anchors = null; for (const h of ['rh', 'lh']) for (const e of b[h]) { e.el = null; e.sn = null; } });
+    return {
+      learn: true, li: 3, ei: pi, gi: pi, pageIdx: pi, title: piece.title, key: pb[0].key, ts: pb[0].ts, bpm: piece.bpm, bars: pb,
+      noCountIn: true, showTs: pi === 0, barFrom: pb[0].num, barTo: pb[pb.length - 1].num, nBarsTotal: bars.length,
+      prevBar: pi > 0 ? pages[pi - 1][pages[pi - 1].length - 1] : null, tex: 'piano',
+    };
+  });
+  return exs;
+}
+
+/* ---------------- 练习数据 ---------------- */
+function learnDefaults(n) {
+  return { a: 1, b: Math.min(n, 8), method: 'free', ladder: { start: 60, step: 5, speed: 60 }, back: { chunk: 2, stage: 1 }, need: 3, streak: 0, speed: 80, heat: true, loop: true, stats: {}, log: [], days: {} };
+}
+function learnSave() { if (LM.id && LM.data) lsSet('sr.learn.' + LM.id, LM.data); }
+function learnActiveRange() {
+  const D = LM.data, n = LM.bars.length;
+  let a = clamp(D.a, 1, n), b = clamp(D.b, a, n);
+  if (D.method === 'back') { const C = D.back.chunk; const stages = Math.ceil((b - a + 1) / C); const s = clamp(D.back.stage, 1, stages); a = Math.max(a, b - s * C + 1); }
+  return { a, b };
+}
+function learnBackStages() { const D = LM.data; return Math.ceil((D.b - D.a + 1) / D.back.chunk); }
+function learnSetRangeT0() {
+  const R = learnActiveRange();
+  LM.startT0 = LM.bars[R.a - 1].t0; LM.endT0 = LM.bars[R.b - 1].t1;
+  return R;
+}
+function learnRangeStartCur() { const R = learnActiveRange(); const b = LM.bars[R.a - 1]; return { ex: b.ex, bar: b.bi }; }
+function learnFollowStartT0() { return LM._followFrom ?? LM.startT0; }
+
+/* ---------------- 播放、评分 ---------------- */
+function learnStartPlay() {
+  const R = learnSetRangeT0();
+  let sb = LM.bars[R.a - 1];
+  const cex = S.exs[S.cur.ex]; const cb = cex && cex.bars[S.cur.bar];
+  if (cb && cb.gidx >= R.a - 1 && cb.gidx <= R.b - 1) sb = cb;
+  LM.passFull = sb.gidx === R.a - 1;
+  const ex = S.exs[sb.ex];
+  P.curEx = sb.ex; P.visEx = sb.ex; P.stopAt = null; P.vq = []; clearHighlights();
+  P.pendingPass = null; P.pendingCountIn = null; P.countIn = null;
+  if (S.settings.scroll) flipTo(sb.ex);
+  learnResetScore(sb.t0);
+  if (S.settings.follow && MIDI.connected) { LM._followFrom = sb.t0; S.cur = { ex: sb.ex, bar: sb.bi }; startFollow(); LM._followFrom = null; learnHudUpdate(); return; }
+  P.mode = 'play';
+  const now = AU.ctx.currentTime + 0.12; const k = spt(ex);
+  const bts = sb.ts || ex.ts; const cnt = S.settings.countIn || 1;
+  const startT0 = sb.t0 - cnt * bts.len * k;
+  for (let c = 0; c < cnt; c++) for (let b = 0; b < bts.len - 1e-6; b += bts.beat) AU.click(now + ((c * bts.len + b) * k) / factor(), b === 0);
+  P.countIn = { from: startT0, to: sb.t0, ex: sb.ex, bar: sb };
+  P.anchors = [{ ctx: now, t0: startT0, f: factor() }];
+  P.startT0 = startT0;
+  P.nextIdx = lowerBound(S.ev, sb.t0);
+  P.playing = true;
+  P.timer = setInterval(schedule, 25);
+  schedule();
+  updatePlayBtn(); learnHudUpdate();
+}
+// 播到范围末尾：循环时插一小节预备拍，再回到开头
+function learnWrap() {
+  if (P.stopAt !== null || (P.pendingPass && !LM.loop)) return false;
+  const at = ctxTimeOf(LM.endT0);
+  P.pendingPass = { at, full: LM.passFull };
+  if (!LM.loop) { P.stopAt = at + 0.3; P.nextIdx = S.ev.length; return false; }
+  const R = learnActiveRange(); const sb = LM.bars[R.a - 1]; const ex = S.exs[sb.ex];
+  const k = spt(ex); const bts = sb.ts || ex.ts; const f = factor();
+  const gap = bts.len * k;
+  P.anchors.push({ ctx: at, t0: LM.startT0 - gap, f });
+  for (let b = 0; b < bts.len - 1e-6; b += bts.beat) AU.click(at + (b * k) / f, b === 0);
+  P.pendingCountIn = { from: LM.startT0 - gap, to: LM.startT0, ex: sb.ex, bar: sb };
+  P.nextIdx = lowerBound(S.ev, LM.startT0);
+  P.curEx = sb.ex;
+  LM.passFull = true;
+  return true;
+}
+function learnResetScore(fromT0 = -1) {
+  const from = fromT0 < 0 ? LM.startT0 : fromT0;
+  SC.L = { hit: 0, miss: 0, wrong: 0, exp: [], idx: 0, bars: {} };
+  for (const b of LM.bars) if (b.t1 > LM.startT0 && b.t0 < LM.endT0) for (const h of ['rh', 'lh']) for (const e of b[h]) if (e.el) e.el.classList.remove('hit', 'miss', 'expect');
+  if (MIDI.connected) SC.L.exp = S.ev.filter((e) => e.kind === 'note' && e.t0 >= from - 1e-6 && e.t0 < LM.endT0 - 1e-6 && practiceHand(e.hand)).map((e) => ({ t0: e.t0, midi: e.midi, e: e.e, hit: false }));
+  hud();
+}
+// 一遍结束：统计、判断是否弹对、推进速度阶梯 / 从后往前
+function learnPassEnd(pp) {
+  const D = LM.data; const sc = SC.L;
+  if (sc && MIDI.connected && P.mode === 'play') sweepMisses(LM.endT0 + 60);
+  let clean = null;
+  if (sc && MIDI.connected && sc.exp.length + sc.hit > 0) {
+    const exp = P.mode === 'follow' ? sc.hit : sc.exp.length;
+    clean = sc.miss === 0 && sc.wrong <= 1 && sc.hit >= exp;
+    for (const [g, s] of Object.entries(sc.bars || {})) {
+      const t = (D.stats[g] = D.stats[g] || { exp: 0, hit: 0, wrong: 0, passes: 0 });
+      t.exp += s.exp; t.hit += s.hit; t.wrong += s.wrong; t.passes++;
+    }
+    const day = (D.days[today()] = D.days[today()] || { passes: 0, clean: 0, best: 0 });
+    day.passes++;
+    if (clean && pp.full) { day.clean++; day.best = Math.max(day.best, S.settings.speed); }
+    const pct = Math.round((100 * sc.hit) / Math.max(1, exp));
+    HUD.last = `这遍 ${pct}%`;
+    if (!pp.full) toast(`这遍从中间开始，不计入过关（弹对 ${sc.hit}/${exp}，错音 ${sc.wrong}）`);
+    else learnJudge(clean, `弹对 ${sc.hit}/${exp}，错音 ${sc.wrong}`);
+  }
+  learnSave(); learnPaint(); learnUpdatePanel();
+  learnResetScore(LM.startT0);
+}
+// 判断一遍的结果（MIDI 自动判断，或手动点“这遍弹对了”）
+function learnJudge(clean, detail) {
+  const D = LM.data;
+  const ok = clean ? '✓ 弹对' : '✗ 没过';
+  if (D.method === 'free') { toast(`${ok}（${detail}）`); learnHudUpdate(); return; }
+  if (!clean) { D.streak = 0; toast(`${ok}（${detail}），从 0/${D.need} 重新数`); learnHudUpdate(); return; }
+  D.streak++;
+  if (D.streak < D.need) { toast(`${ok}（${detail}）：连续 ${D.streak}/${D.need}`); learnHudUpdate(); return; }
+  D.streak = 0;
+  const R = learnActiveRange();
+  if (D.method === 'ladder') {
+    const sp = S.settings.speed;
+    learnLog({ d: today(), a: R.a, b: R.b, m: 'ladder', sp });
+    if (sp >= 100) { toast(`🎉 原速连续弹对 ${D.need} 遍！第 ${R.a}–${R.b} 小节过关`); learnHudUpdate(); learnSave(); return; }
+    const nsp = Math.min(100, sp + D.ladder.step);
+    D.ladder.speed = nsp;
+    toast(`🎉 ${sp}% 连续弹对 ${D.need} 遍，速度提到 ${nsp}%`);
+    learnRestart(() => setSpeed(nsp));
+  } else if (D.method === 'back') {
+    const stages = learnBackStages();
+    learnLog({ d: today(), a: R.a, b: R.b, m: 'back', st: D.back.stage, of: stages, sp: S.settings.speed });
+    if (D.back.stage >= stages) { toast(`🎉 第 ${R.a}–${R.b} 小节从头到尾连续弹对 ${D.need} 遍，整段过关！`); learnHudUpdate(); learnSave(); return; }
+    D.back.stage++;
+    const R2 = learnActiveRange();
+    toast(`🎉 过关！往前加一段：现在练第 ${R2.a}–${R2.b} 小节`);
+    learnRestart();
+  }
+  learnSave();
+}
+// 过关记录：同一天同一项只记一次
+function learnLog(x) {
+  const D = LM.data; const k = JSON.stringify(x);
+  if (D.log.some((y) => JSON.stringify(y) === k)) return;
+  D.log.unshift(x); if (D.log.length > 200) D.log.length = 200;
+}
+function learnRestart(fn) {
+  const was = P.playing;
+  if (was) stopPlay(false);
+  if (fn) fn();
+  learnSetRangeT0(); S.cur = learnRangeStartCur(); placeIdleCursor(); learnPaint(); learnHudUpdate(); learnUpdatePanel();
+  if (was) setTimeout(() => { if (LM.active && !P.playing) startPlay(); }, 900);
+}
+function learnFollowPassEnd() {
+  learnPassEnd({ full: LM.passFull });
+  if (!P.playing) return;
+  if (!LM.loop) { stopPlay(false); S.cur = learnRangeStartCur(); placeIdleCursor(); return; }
+  learnSetRangeT0();
+  FOL.idx = lowerBound(S.ons, LM.startT0); LM.passFull = true;
+  const o = S.ons[FOL.idx]; if (o) P.curEx = o.ex;
+  prepFollow();
+}
+function learnHudUpdate() {
+  if (!LM.active) { LM.hud = ''; return hud(); }
+  const D = LM.data; const R = learnActiveRange();
+  const rng = `第${R.a}–${R.b}小节`;
+  if (D.method === 'ladder') LM.hud = `${rng} · 阶梯 ${S.settings.speed}% · ${D.streak}/${D.need}`;
+  else if (D.method === 'back') LM.hud = `${rng} · 倒练 ${D.back.stage}/${learnBackStages()} 步 · ${D.streak}/${D.need}`;
+  else LM.hud = rng + ' · 循环';
+  hud();
+  const el = $('lStatus'); if (el) el.textContent = learnStatusText();
+}
+function learnStatusText() {
+  const D = LM.data; const R = learnActiveRange();
+  const judge = MIDI.connected ? '每遍结束自动判断（没有漏音、错音不超过 1 个算弹对）' : '没有连接 MIDI：每弹对一遍，点“✓ 这遍弹对了”';
+  if (D.method === 'ladder') return `速度阶梯：现在 ${S.settings.speed}%，第 ${R.a}–${R.b} 小节已连续弹对 ${D.streak}/${D.need} 遍。${judge}。`;
+  if (D.method === 'back') return `从后往前：第 ${D.back.stage}/${learnBackStages()} 步，现在练第 ${R.a}–${R.b} 小节，已连续弹对 ${D.streak}/${D.need} 遍。${judge}。`;
+  return `自由循环：第 ${R.a}–${R.b} 小节反复播放。${MIDI.connected ? '每遍结束显示成绩。' : ''}`;
+}
+
+/* ---------------- 谱面底色：练习范围、易错小节 ---------------- */
+function learnAfterRender(ex) { learnPaint(ex.gi); }
+function learnPaint(onlyGi) {
+  if (!LM.active || !LM.data) return;
+  const R = learnActiveRange(), D = LM.data;
+  for (const s of S.systems) {
+    if (!s || (onlyGi !== undefined && s.ex !== onlyGi)) continue;
+    s.el.querySelectorAll('.lov').forEach((n) => n.remove());
+    for (const b of s.bars) {
+      const n = b.num; const div = document.createElement('div'); div.className = 'lov';
+      const inR = n >= R.a && n <= R.b;
+      const st = D.stats[b.gidx];
+      let bg = inR ? 'rgba(47,111,222,.07)' : 'transparent';
+      if (D.heat && st && st.exp > 0) {
+        const rate = clamp((st.exp - st.hit + st.wrong) / st.exp, 0, 1);
+        if (rate > 0.02) bg = `rgba(210,63,63,${(0.06 + rate * 0.3).toFixed(3)})`;
+      }
+      div.style.cssText = `left:${b.x0 * s.zoom}px;width:${(b.x1 - b.x0) * s.zoom}px;background:${bg}` + (inR && n === R.a ? ';border-left:3px solid rgba(47,111,222,.55)' : '') + (inR && n === R.b ? ';border-right:3px solid rgba(47,111,222,.55)' : '');
+      s.el.appendChild(div);
+    }
+  }
+}
+function learnPickBar(bar) {
+  const D = LM.data;
+  if (LM.picking === 'a') { D.a = bar.num; D.b = bar.num; LM.picking = 'b'; toast(`起点：第 ${bar.num} 小节。再点终点小节`); }
+  else { const x = bar.num; if (x < D.a) { D.b = D.a; D.a = x; } else D.b = x; LM.picking = null; document.body.classList.remove('lpicking'); toast(`练习范围：第 ${D.a}–${D.b} 小节`); }
+  D.streak = 0; D.back.stage = 1;
+  learnSave(); learnSetRangeT0(); S.cur = learnRangeStartCur(); placeIdleCursor(); learnPaint(); learnUpdatePanel(); learnHudUpdate();
+}
+
+/* ---------------- 进入 / 退出 ---------------- */
+async function learnLoadPieceData(id) {
+  const rec = await IDB.get('piece:' + id);
+  if (!rec) throw new Error('这首曲子的数据找不到了（可能被浏览器清理），请重新载入文件');
+  const piece = rec.kind === 'xml' ? parseMusicXML(rec.data) : rec.kind === 'pop909cl' ? pop909clToPiece(parseMidi(rec.data), rec.beat, rec) : rec.kind === 'pop909' ? pop909ToPiece(parseMidi(rec.data), rec.beat, rec) : midiToPiece(parseMidi(rec.data), rec.name);
+  piece.title = rec.name || piece.title;
+  return piece;
+}
+async function learnEnter(id) {
+  if (P.playing) stopPlay(false);
+  $('loading').classList.add('show');
+  await new Promise((r) => setTimeout(r, 20));
+  let piece;
+  try { piece = await learnLoadPieceData(id); } catch (e) { $('loading').classList.remove('show'); toast('打不开：' + e.message); return false; }
+  // 从视奏练习进来时记下视奏的速度，退出时恢复（刷新页面后直接回到学曲子时不能覆盖它）
+  if (!LM.active && lsGet('sr.mode', 'sight') !== 'learn') lsSet('sr.sightSpeed', S.settings.speed);
+  LM.active = true; LM.id = id; LM.piece = piece; LM.bars = piece.bars;
+  LM.data = Object.assign(learnDefaults(piece.bars.length), lsGet('sr.learn.' + id, {}));
+  LM.data.a = clamp(LM.data.a, 1, piece.bars.length); LM.data.b = clamp(LM.data.b, LM.data.a, piece.bars.length);
+  LM.loop = LM.data.loop !== false;
+  lsSet('sr.mode', 'learn'); lsSet('sr.lastPiece', id);
+  document.body.classList.add('learning');
+  S.settings.speed = LM.data.method === 'ladder' ? LM.data.ladder.speed : LM.data.speed; updateSpeedLabel();
+  $('learnPanel').hidden = true;
+  await learnRebuild(true);
+  return true;
+}
+async function learnRebuild(fresh) {
+  const keep = !fresh && S.exs[S.cur.ex] && S.exs[S.cur.ex].bars[S.cur.bar];
+  const keepG = keep ? keep.gidx : null;
+  $('loading').classList.add('show');
+  await new Promise((r) => setTimeout(r, 20));
+  S.exs = learnPages(LM.piece);
+  buildTimeline();
+  await renderAll();
+  $('loading').classList.remove('show');
+  learnSetRangeT0();
+  const b = keepG != null ? LM.bars[keepG] : LM.bars[learnActiveRange().a - 1];
+  S.cur = { ex: b.ex, bar: b.bi }; cursor.lastSys = -1; placeIdleCursor(); flipTo(b.ex);
+  learnPaint(); learnUpdatePanel(); learnHudUpdate();
+}
+async function learnExit() {
+  if (P.playing) stopPlay(false);
+  LM.active = false; LM.picking = null; LM.hud = '';
+  document.body.classList.remove('learning', 'lpicking');
+  lsSet('sr.mode', 'sight');
+  S.settings.speed = lsGet('sr.sightSpeed', 100); saveSettings();
+  $('learnPanel').hidden = true;
+  let lvl = 0; try { lvl = clamp(parseInt(localStorage.getItem('sr.lastLevel') || '0', 10) || 0, 0, LEVELS.length - 1); } catch (e) { }
+  await regenerate(S.seed, lvl);
+  hud();
+}
+async function learnLoadFile(file) {
+  const u8 = new Uint8Array(await file.arrayBuffer());
+  let kind, data;
+  if (u8[0] === 0x50 && u8[1] === 0x4b) { kind = 'xml'; data = await unzipMusicXML(u8); }
+  else if (u8[0] === 0x4d && u8[1] === 0x54 && u8[2] === 0x68 && u8[3] === 0x64) { kind = 'midi'; data = u8; }
+  else { const t = decodeText(u8); if (/<score-(partwise|timewise)/.test(t)) { kind = 'xml'; data = t; } else throw new Error('认不出这个文件。请用 MusicXML（.musicxml / .xml / .mxl）或 MIDI（.mid）'); }
+  const piece = kind === 'xml' ? parseMusicXML(data) : midiToPiece(parseMidi(data), file.name);
+  const name = (piece.title || file.name.replace(/\.[^.]+$/, '')).slice(0, 60);
+  const id = 'p' + Date.now().toString(36);
+  await IDB.put('piece:' + id, { kind, data, name });
+  const list = pieceList(); list.unshift({ id, name, kind, bars: piece.bars.length, added: today() }); lsSet('sr.pieces', list);
+  return { id, name, n: piece.bars.length };
+}
+
+/* ---------------- POP909 曲库 ---------------- */
+const POP909 = POP909_LIST.split('\n').map((l) => { const [id, name, artist, ef] = l.split('|'); return { id: +id, name, artist, E: +ef[0], F: +ef[1] }; });
+// 默认显示的老歌
+const POP909_PICK = [526, 640, 905, 898, 428, 124, 222, 26, 879, 687, 171, 385, 72, 176, 497, 269, 22, 513, 387, 141, 17, 536, 198, 882, 560, 277, 515, 482, 444, 107, 583, 591, 791, 114, 762, 346];
+function pop909Render(q) {
+  q = (q || '').trim().toLowerCase();
+  const list = q ? POP909.filter((x) => (x.name + ' ' + x.artist).toLowerCase().includes(q)).slice(0, 60) : POP909_PICK.map((id) => POP909[id - 1]).filter(Boolean);
+  $('lPop').innerHTML = list.length ? list.map((x) => `<button data-pop="${x.id}">${escHtml(x.name)}<small> · ${escHtml(x.artist)}</small></button>`).join('') : '<span class="muted">没有找到</span>';
+}
+async function pop909Load(id) {
+  const meta = POP909[id - 1]; if (!meta) throw new Error('编号不对');
+  const name = `${meta.name}（${meta.artist}）`;
+  const have = pieceList().find((p) => p.pop === id);
+  if (have) return { id: have.id, name: have.name, n: have.bars, existed: true };
+  const n3 = String(id).padStart(3, '0');
+  const base = `https://raw.githubusercontent.com/music-x-lab/POP909-Dataset/master/POP909/${n3}/`;
+  const cl = `https://raw.githubusercontent.com/AndyWeasley2004/POP909-CL-Dataset/main/POP909_processed/${n3}.mid`;
+  let mid, beat, kind = 'pop909cl';
+  try {
+    // 谱面优先用 POP909-CL（校正过小节线、拍号、调号）；它缺的几首用原版
+    const [r1, r2] = await Promise.all([fetch(cl), fetch(base + 'beat_midi.txt')]);
+    if (!r2.ok) throw new Error('HTTP ' + r2.status);
+    beat = await r2.text();
+    if (r1.ok) mid = new Uint8Array(await r1.arrayBuffer());
+    else { kind = 'pop909'; const r3 = await fetch(base + n3 + '.mid'); if (!r3.ok) throw new Error('HTTP ' + r3.status); mid = new Uint8Array(await r3.arrayBuffer()); }
+  } catch (e) { throw new Error('下载失败（需要能上网）：' + e.message); }
+  const rec = { kind, data: mid, beat, name, E: meta.E, F: meta.F };
+  const piece = kind === 'pop909cl' ? pop909clToPiece(parseMidi(mid), beat, rec) : pop909ToPiece(parseMidi(mid), beat, rec);
+  const pid = 'p' + Date.now().toString(36);
+  await IDB.put('piece:' + pid, rec);
+  const list = pieceList(); list.unshift({ id: pid, name, kind: 'pop909', pop: id, bars: piece.bars.length, added: today() }); lsSet('sr.pieces', list);
+  return { id: pid, name, n: piece.bars.length };
+}
+
+/* ---------------- 界面 ---------------- */
+function learnUpdatePanel() {
+  const list = pieceList();
+  const sel = $('lPiece');
+  sel.innerHTML = list.length ? list.map((p) => `<option value="${p.id}">${escHtml(p.name)}（${p.bars} 小节）</option>`).join('') : '<option value="">（还没有曲子）</option>';
+  if (LM.id) sel.value = LM.id;
+  document.querySelectorAll('.lneed').forEach((n) => { n.hidden = !LM.active; });
+  $('lIntro').hidden = LM.active;
+  if (!LM.active) return;
+  const D = LM.data, n = LM.bars.length;
+  $('lA').max = n; $('lB').max = n; $('lA').value = D.a; $('lB').value = D.b; $('lTotal').textContent = `共 ${n} 小节`;
+  $('lMethod').value = D.method; $('lStep').value = String(D.ladder.step); $('lStart').value = String(D.ladder.start);
+  $('lChunk').value = String(D.back.chunk); $('lNeed').value = String(D.need);
+  $('lLoop').checked = LM.loop; $('lHeat').checked = D.heat;
+  $('lLadderOpts').hidden = D.method !== 'ladder'; $('lBackOpts').hidden = D.method !== 'back';
+  $('lOk').hidden = MIDI.connected || D.method === 'free';
+  $('lStatus').textContent = learnStatusText();
+  // 进度
+  const days = Object.entries(D.days).sort((a, b) => (a[0] < b[0] ? 1 : -1)).slice(0, 5);
+  const dayHtml = days.map(([d, x]) => `<li>${d.slice(5)}：练了 ${x.passes} 遍，弹对 ${x.clean} 遍${x.best ? `，弹对时最高速度 ${x.best}%` : ''}</li>`).join('');
+  const logHtml = D.log.slice(0, 8).map((x) => `<li>${x.d.slice(5)} 第 ${x.a}–${x.b} 小节：${x.m === 'ladder' ? `${x.sp}% 过关` : `从后往前第 ${x.st}/${x.of} 步过关（${x.sp}%）`}</li>`).join('');
+  $('lLog').innerHTML = (dayHtml ? `<b>每天</b><ul>${dayHtml}</ul>` : '') + (logHtml ? `<b>过关记录</b><ul>${logHtml}</ul>` : '') || '<span class="muted">还没有记录。连上 MIDI 弹几遍，这里会显示每天的进步。</span>';
+}
+function learnInitUI() {
+  const panel = $('learnPanel');
+  $('bLearn').onclick = () => { $('settings').hidden = true; panel.hidden = !panel.hidden; learnUpdatePanel(); };
+  $('bSet').addEventListener('click', () => { panel.hidden = true; });
+  $('lFile').onchange = async (e) => {
+    const f = e.target.files && e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    try {
+      $('loading').classList.add('show');
+      const r = await learnLoadFile(f);
+      toast(`已载入《${r.name}》，共 ${r.n} 小节`);
+      await learnEnter(r.id);
+    } catch (er) { toast('载入失败：' + er.message); console.error(er); }
+    finally { $('loading').classList.remove('show'); }
+  };
+  $('lPiece').onchange = async (e) => { if (e.target.value) await learnEnter(e.target.value); };
+  pop909Render('');
+  $('lSearch').oninput = (e) => pop909Render(e.target.value);
+  $('lPop').onclick = async (e) => {
+    const btn = e.target.closest('button[data-pop]'); if (!btn) return;
+    try {
+      $('loading').classList.add('show');
+      const r = await pop909Load(+btn.dataset.pop);
+      toast(r.existed ? `打开《${r.name}》` : `已载入《${r.name}》，共 ${r.n} 小节`);
+      await learnEnter(r.id);
+    } catch (er) { toast('载入失败：' + er.message); console.error(er); }
+    finally { $('loading').classList.remove('show'); }
+  };
+  $('lOpen').onclick = async () => { const id = $('lPiece').value; if (id) await learnEnter(id); };
+  $('lDel').onclick = async () => {
+    const id = $('lPiece').value; if (!id) return;
+    const p = pieceList().find((x) => x.id === id);
+    if (!confirm(`删除《${p ? p.name : ''}》和它的练习记录？`)) return;
+    await IDB.del('piece:' + id); lsSet('sr.pieces', pieceList().filter((x) => x.id !== id));
+    try { localStorage.removeItem('sr.learn.' + id); } catch (er) { }
+    if (LM.id === id) { LM.id = null; await learnExit(); }
+    learnUpdatePanel();
+  };
+  $('lExit').onclick = () => learnExit();
+  const rangeChanged = () => {
+    const D = LM.data, n = LM.bars.length;
+    let a = clamp(parseInt($('lA').value, 10) || 1, 1, n), b = clamp(parseInt($('lB').value, 10) || a, 1, n);
+    if (b < a) [a, b] = [b, a];
+    D.a = a; D.b = b; D.streak = 0; D.back.stage = 1; learnSave();
+    learnRestart();
+  };
+  $('lA').onchange = rangeChanged; $('lB').onchange = rangeChanged;
+  $('lAll').onclick = () => { $('lA').value = 1; $('lB').value = LM.bars.length; rangeChanged(); };
+  $('lPick').onclick = () => { LM.picking = 'a'; document.body.classList.add('lpicking'); panel.hidden = true; toast('在谱上点起点小节'); };
+  $('lMethod').onchange = (e) => {
+    const D = LM.data; D.method = e.target.value; D.streak = 0; D.back.stage = 1;
+    if (D.method === 'ladder') learnRestart(() => { D.ladder.speed = D.ladder.start; setSpeed(D.ladder.start); });
+    else learnRestart();
+    learnSave();
+  };
+  $('lStart').onchange = (e) => { const D = LM.data; D.ladder.start = +e.target.value; D.ladder.speed = D.ladder.start; D.streak = 0; learnSave(); learnRestart(() => setSpeed(D.ladder.start)); };
+  $('lStep').onchange = (e) => { LM.data.ladder.step = +e.target.value; learnSave(); learnHudUpdate(); };
+  $('lChunk').onchange = (e) => { const D = LM.data; D.back.chunk = +e.target.value; D.back.stage = 1; D.streak = 0; learnSave(); learnRestart(); };
+  $('lNeed').onchange = (e) => { LM.data.need = +e.target.value; LM.data.streak = 0; learnSave(); learnHudUpdate(); learnUpdatePanel(); };
+  $('lLoop').onchange = (e) => { LM.loop = e.target.checked; LM.data.loop = LM.loop; learnSave(); };
+  $('lHeat').onchange = (e) => { LM.data.heat = e.target.checked; learnSave(); learnPaint(); };
+  $('lOk').onclick = () => { if (LM.active) { learnJudge(true, '手动确认'); learnSave(); learnUpdatePanel(); } };
+  $('lClear').onclick = () => { if (!confirm('清除这首曲子的易错统计和进度记录？')) return; const D = LM.data; D.stats = {}; D.log = []; D.days = {}; D.streak = 0; learnSave(); learnPaint(); learnUpdatePanel(); };
+}
+// 速度：学曲子时单独记（不影响视奏练习的速度）
+function learnOnSpeed(v) { if (!LM.active || !LM.data) return; if (LM.data.method === 'ladder') LM.data.ladder.speed = v; else LM.data.speed = v; learnSave(); learnHudUpdate(); }
+async function learnRestore() {
+  learnUpdatePanel();
+  if (lsGet('sr.mode', 'sight') !== 'learn') return;
+  const id = lsGet('sr.lastPiece', null);
+  if (id && pieceList().some((p) => p.id === id)) await learnEnter(id);
+}
 </script>
 </body>
 </html>

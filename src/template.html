@@ -39,6 +39,23 @@ button,label,#top,#kbd{-webkit-user-select:none;user-select:none}
 #settings{position:absolute;left:0;right:0;top:100%;border-top:1px solid #3a3f49;background:#262a32;box-shadow:0 8px 20px rgba(0,0,0,.3)}
 #settings .row{font-size:13px}
 #settings input[type=range]{width:90px;accent-color:var(--accent)}
+#learnPanel{position:absolute;left:0;right:0;top:100%;border-top:1px solid #3a3f49;background:#262a32;box-shadow:0 8px 20px rgba(0,0,0,.3);max-height:calc(100vh - 60px);overflow-y:auto}
+#learnPanel .row{font-size:13px}
+#learnPanel [hidden]{display:none!important}
+#learnPanel input[type=number]{width:58px;background:var(--bar2);color:var(--barTxt);border:1px solid #3c414c;border-radius:6px;padding:4px 6px}
+#top .lbtn{background:var(--accent);color:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;font-weight:600}
+.lnote{flex-basis:100%;color:#cfd6e6;font-size:12.5px;line-height:1.55;white-space:normal}
+.lnote ul{margin:2px 0 6px;padding-left:18px}
+.lnote .muted{color:#9aa0ab}
+.lbreak{flex-basis:100%;height:0}
+#lSearch{flex-basis:260px;background:var(--bar2);color:var(--barTxt);border:1px solid #3c414c;border-radius:8px;padding:6px 10px}
+.lpop{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px}
+#top .lpop button{padding:5px 10px;font-size:13px}
+.lpop small{color:#9aa0ab}
+.lov{position:absolute;top:0;bottom:0;pointer-events:none;mix-blend-mode:multiply;border-radius:3px}
+.learning #lLevelBox,.learning #bNew{display:none!important}
+.lpicking .system{cursor:crosshair}
+.lpicking #wrap{box-shadow:inset 0 0 0 3px rgba(224,122,31,.6)}
 #seedTxt{color:#9aa0ab}
 #midiDiag{color:#9aa0ab;font-size:12px;flex-basis:100%;word-break:break-all}
 .brand{font-weight:700;letter-spacing:.5px;color:#fff;margin-right:4px}
@@ -124,6 +141,10 @@ body.nomidi .midi{display:none!important}
   #bHelp{grid-column:span 2}
   #settings{position:fixed;left:calc(66px + env(safe-area-inset-left));top:0;bottom:0;right:auto;width:min(480px,72vw);overflow-y:auto;border-top:none;border-left:1px solid #3a3f49}
   #settings .row{flex-direction:column;align-items:flex-start;gap:10px;font-size:14px}
+  #learnPanel{position:fixed;left:calc(66px + env(safe-area-inset-left));top:0;bottom:0;right:auto;width:min(520px,78vw);max-height:none;overflow-y:auto;border-top:none;border-left:1px solid #3a3f49}
+  #learnPanel .row{display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;gap:10px 8px;font-size:14px;padding:10px}
+  #learnPanel label{display:flex;flex-wrap:wrap}
+  #bLearn{grid-column:span 2}
   .ex-head{padding:3px 2px 0}
   .ex-no{font-size:13px}
   .tag{font-size:11px;padding:0 6px}
@@ -158,11 +179,12 @@ body.nomidi .midi{display:none!important}
     <button id="bPlay">▶ 播放</button>
     <button id="bPrev" title="上一首（←）">⏮</button>
     <button id="bNext" title="下一首（→）">⏭</button>
-    <label><span class="long">级别</span> <select id="selLevel"></select></label>
+    <label id="lLevelBox"><span class="long">级别</span> <select id="selLevel"></select></label>
     <label class="spdbox"><span class="long">速度</span> <button id="spdDn" class="short" title="减慢">−</button><input id="spd" type="range" min="30" max="150" step="5" value="100"><button id="spdUp" class="short" title="加快">＋</button><span id="spdTxt">100%</span></label>
     <label id="lMetro"><input type="checkbox" id="cMetro"> <span class="long">节拍器</span><span class="short">拍</span></label>
     <button id="bSet">⚙<span class="long"> 设置</span></button>
     <button id="bHelp">?<span class="long"> 说明</span></button>
+    <button id="bLearn">📖<span class="long"> 学曲子</span></button>
     <div id="midiHud"></div>
     <div id="status"></div>
   </div>
@@ -183,6 +205,35 @@ body.nomidi .midi{display:none!important}
       <label>谱面大小 <input type="range" id="zoom" min="50" max="100" step="5" value="100"></label>
       <button id="bNew">🎲 换一套新谱</button>
       <span id="seedTxt"></span>
+    </div>
+  </div>
+  <div id="learnPanel" hidden>
+    <div class="row">
+      <div id="lIntro" class="lnote"><b>学曲子</b>：载入你自己的曲谱文件（MusicXML、.mxl 或 MIDI），选几小节反复练，用“速度阶梯”或“从后往前”一步步过关。连上 MIDI 键盘会自动判断每遍弹得对不对，并标出最容易错的小节。曲谱只保存在这台设备上。</div>
+      <label class="lbtn">📂 载入曲谱文件<input type="file" id="lFile" hidden></label>
+      <label>我的曲子 <select id="lPiece"></select></label>
+      <button id="lOpen">打开</button>
+      <button id="lDel">🗑 删除</button>
+      <button id="lExit" class="lneed">↩ 回到视奏练习</button>
+      <span class="lbreak lneed"></span>
+      <label class="lneed">范围 第 <input id="lA" type="number" min="1" inputmode="numeric"> – <input id="lB" type="number" min="1" inputmode="numeric"> 小节 <small id="lTotal"></small></label>
+      <button id="lAll" class="lneed">整首</button>
+      <button id="lPick" class="lneed">👆 在谱上点选范围</button>
+      <span class="lbreak lneed"></span>
+      <label class="lneed">练法 <select id="lMethod"><option value="free">自由循环</option><option value="ladder">速度阶梯</option><option value="back">从后往前</option></select></label>
+      <label id="lLadderOpts" class="lneed">起始速度 <select id="lStart"><option>40</option><option>45</option><option>50</option><option>55</option><option>60</option><option>65</option><option>70</option><option>75</option><option>80</option><option>85</option><option>90</option></select>% 每次加 <select id="lStep"><option>5</option><option>10</option></select>%</label>
+      <label id="lBackOpts" class="lneed">每次往前加 <select id="lChunk"><option>1</option><option>2</option><option>4</option></select> 小节</label>
+      <label class="lneed">过关：连续弹对 <select id="lNeed"><option>2</option><option>3</option><option>5</option></select> 遍</label>
+      <label class="lneed"><input type="checkbox" id="lLoop" checked> 循环播放</label>
+      <label class="lneed"><input type="checkbox" id="lHeat" checked> 标出易错小节</label>
+      <button id="lOk" class="lneed">✓ 这遍弹对了</button>
+      <div id="lStatus" class="lnote lneed"></div>
+      <div id="lLog" class="lnote lneed"></div>
+      <button id="lClear" class="lneed">清除这首的记录</button>
+      <span class="lbreak"></span>
+      <div class="lnote"><b>🎵 POP909 曲库</b>：909 首华语流行歌的钢琴编配（右手旋律、左手伴奏），点歌名就载入。谱面来自 POP909-CL（校正过小节线和调号，MIT 许可），速度取自原版 POP909 数据集（music-x-lab，MIT 许可）；点歌时从它们的 GitHub 下载，需要能上网。</div>
+      <input id="lSearch" type="search" placeholder="搜歌名或歌手，例如 邓丽君" autocomplete="off">
+      <div id="lPop" class="lpop"></div>
     </div>
   </div>
 </header>
@@ -223,6 +274,16 @@ body.nomidi .midi{display:none!important}
     <li>第一次要<b>点“播放”</b>才会出声（iOS 规定声音必须由手指触发）。iOS 16.4 以上静音开关打开也能出声；如果还是没声音，拨开静音开关、调高媒体音量。</li>
     <li>手机屏幕较矮，屏幕键盘默认关闭，可在“设置”里打开；高级别里特别密的曲子在手机上会自动变成 4–6 小节，保证音符看得清。</li>
     <li>iPhone / iPad 上的 Safari、Chrome 等浏览器都不支持 MIDI。想在 iPhone / iPad 上用“弹对变绿”和等待模式，可以试试用 MIDIWeb Browser 这类支持 Web MIDI 的 App 打开本页网址；电脑上的 Chrome / Edge 可以直接用。</li>
+  </ul>
+  <h3>学曲子（📖 按钮）</h3>
+  <ul>
+    <li><b>载入曲谱</b>：点“📖 学曲子 → 📂 载入曲谱文件”，选 MusicXML（.musicxml / .xml / .mxl）或 MIDI（.mid）文件。MuseScore 等打谱软件都能导出 MusicXML。曲谱只存在这台设备上。</li>
+    <li><b>选范围</b>：输入起止小节，或点“👆 在谱上点选范围”后在谱上点两下。范围会循环播放，每遍之间有一小节预备拍。</li>
+    <li><b>速度阶梯</b>：从较慢的速度开始（例如 60%），连续弹对几遍（默认 3 遍）就自动加快 5%，一直到原速。</li>
+    <li><b>从后往前</b>：先练范围的最后一两小节，过关后自动往前加一段，越往后越熟，每次都完整弹到结尾。</li>
+    <li><b>判断“弹对”</b>：连上 MIDI 键盘时自动判断（没有漏音、错音不超过 1 个）；没有 MIDI 时，自己觉得弹对了就点“✓ 这遍弹对了”。</li>
+    <li><b>易错小节</b>：每遍的对错按小节累计，越常错的小节底色越红，下次先练那几小节。“我弹”选右手或左手就是分手练习，另一只手由电脑弹。</li>
+    <li>有反复记号的曲子会按演奏顺序展开，小节号按展开后的顺序编。D.C.、D.S. 不展开。</li>
   </ul>
   <h3>快捷键</h3>
   <p><kbd>空格</kbd> 播放/暂停　<kbd>←</kbd><kbd>→</kbd>（或 <kbd>PgUp</kbd><kbd>PgDn</kbd>）上一首/下一首　<kbd>↑</kbd><kbd>↓</kbd> 速度　<kbd>M</kbd> 节拍器　<kbd>L</kbd> 循环</p>

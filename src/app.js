@@ -873,7 +873,8 @@ function buildTimeline() {
   S.exs.forEach((ex) => {
     const ts = ex.ts, k = spt(ex);
     ex.countInStart = T;
-    for (let c = 0; c < (S.settings.countIn || 1); c++) {
+    // 学曲子模式的分页是同一首曲子，页与页之间不插预备拍（预备拍在开始播放时临时加）
+    if (!ex.noCountIn) for (let c = 0; c < (S.settings.countIn || 1); c++) {
       for (let b = 0; b < ts.len; b += ts.beat) ev.push({ t0: T + b * k, kind: 'click', strong: b === 0, countIn: true, ex: ex.gi });
       T += ts.len * k;
     }
@@ -881,16 +882,18 @@ function buildTimeline() {
     ex.bars.forEach((bar, bi) => {
       bar.t0 = T; bar.t1 = T + bar.len * k; bar.ex = ex.gi; bar.bi = bi;
       S.bars.push(bar);
-      for (let b = 0; b < ts.len; b += ts.beat) ev.push({ t0: T + b * k, kind: 'click', strong: b === 0, ex: ex.gi });
+      const bts = bar.ts || ts;
+      for (let b = 0; b < bar.len - 1e-6; b += bts.beat) ev.push({ t0: T + b * k, kind: 'click', strong: b === 0, ex: ex.gi });
       for (const h of ['rh', 'lh']) for (const e of bar[h]) {
         if (e.rest) continue;
         const melody = (bar.melHand || 'rh') === h || ex.tex !== 'both';
         const dynF = { p: 0.62, mp: 0.78, mf: 0.92, f: 1.08 };
         e.hand = h; e.t0 = T + e.pos * k; e.bar = bar;
         e.notes.forEach((n, ni) => {
+          if (n.tieStop) return;   // 连音线的后半：不重新发声（前半的时值已经延长）
           let vel = (melody ? 0.82 : 0.52) * (ni < e.notes.length - 1 && melody ? 0.8 : 1);
           if (e.art === 'a>') vel *= 1.22;
-          ev.push({ t0: e.t0, kind: 'note', midi: n.midi, dur0: e.dur * k * (e.art === 'a.' ? 0.42 : 0.96), vel, hand: h, e, ex: ex.gi });
+          ev.push({ t0: e.t0, kind: 'note', midi: n.midi, dur0: (n.tieDur || e.dur) * k * (e.art === 'a.' ? 0.42 : 0.96), vel, hand: h, e, ex: ex.gi });
         });
       }
       T = bar.t1;
@@ -917,7 +920,7 @@ function buildTimeline() {
   const ons = [];
   S.exs.forEach((ex) => ex.bars.forEach((bar) => {
     const map = new Map();
-    for (const h of ['rh', 'lh']) for (const e of bar[h]) { if (e.rest) continue; if (!map.has(e.pos)) map.set(e.pos, []); map.get(e.pos).push(e); }
+    for (const h of ['rh', 'lh']) for (const e of bar[h]) { if (e.rest || e.notes.every((n) => n.tieStop)) continue; if (!map.has(e.pos)) map.set(e.pos, []); map.get(e.pos).push(e); }
     [...map.keys()].sort((a, b) => a - b).forEach((pos) => ons.push({ t0: bar.t0 + pos * spt(ex), ex: ex.gi, bar, pos, evs: map.get(pos) }));
   }));
   S.ons = ons;
@@ -928,30 +931,69 @@ const ACC = { '-2': 'bb', '-1': 'b', '0': 'n', '1': '#', '2': '##' };
 const DUR = { 96: 'w', 72: 'hd', 48: 'h', 36: 'qd', 24: 'q', 18: '8d', 12: '8', 6: '16', 8: '8' };
 function keyStr(d) { return LETTERS[mod(d, 7)] + '/' + Math.floor(d / 7); }
 
+// 空档（某个声部中间没有音的地方）用看不见的 GhostNote 占位，保证同一小节里各声部对齐
+const GAP_VALS = [[96, 'w'], [48, 'h'], [24, 'q'], [12, '8'], [6, '16'], [3, '32'], [1.5, '64']];
+function gapNotes(ticks) {
+  const out = []; let r = ticks;
+  for (const [v, c] of GAP_VALS) while (r >= v - 1e-6) { out.push(new VF.GhostNote({ duration: c })); r -= v; }
+  return out;
+}
+// 休止符的纵向位置：单声部在中间，多声部时上声部靠上、下声部靠下
+const REST_KEY = { treble: ['b/4', 'e/5', 'f/4'], bass: ['d/3', 'g/3', 'a/2'] };
 function buildBarVF(ex, bar) {
-  const ts = ex.ts;
+  const ts = bar.ts || ex.ts;
+  const ksig = (bar.key || ex.key).sig;
   const mk = (evs, clef, hand) => {
-    const acc = {}; const notes = []; const tg = {};
-    for (const e of evs) {
-      let sn;
-      const code = DUR[e.dur];
-      if (e.rest) {
-        const full = e.full;
-        sn = new VF.StaveNote({ clef, keys: [clef === 'treble' ? 'b/4' : 'd/3'], duration: (full ? 'w' : code) + 'r', align_center: !!full });
-        if (!full && code.endsWith('d')) VF.Dot.buildAndAttach([sn], { all: true });
-      } else {
-        sn = new VF.StaveNote({ clef, keys: e.notes.map((n) => keyStr(n.d)), duration: code, auto_stem: true });
-        e.notes.forEach((n, i) => {
-          const cur = (n.d in acc) ? acc[n.d] : ex.key.sig[mod(n.d, 7)];
-          if (n.a !== cur) { sn.addModifier(new VF.Accidental(ACC[n.a]), i); acc[n.d] = n.a; }
-        });
-        if (code.endsWith('d')) VF.Dot.buildAndAttach([sn], { all: true });
+    const notes = []; const tg = {}; const voices = []; const beams = []; const tuplets = [];
+    const byV = new Map();
+    for (const e of evs) { const v = e.v || 0; if (!byV.has(v)) byV.set(v, []); byV.get(v).push(e); }
+    const vids = [...byV.keys()].sort((a, b) => a - b);
+    const multi = vids.length > 1;
+    const acc = {};
+    vids.forEach((vid, vi) => {
+      const list = byV.get(vid).slice().sort((a, b) => a.pos - b.pos);
+      const tick = []; let pos = 0;
+      for (const e of list) {
+        if (e.pos > pos + 1e-6) tick.push(...gapNotes(e.pos - pos));
+        let sn;
+        const code0 = e.code || DUR[e.dur];
+        const base = code0.replace(/d+$/, '');
+        const dots = e.dots ?? (code0.length - base.length);
+        const dstr = base + 'd'.repeat(dots);
+        const rk = REST_KEY[clef] || REST_KEY.treble;
+        if (e.rest) {
+          const full = e.full && list.length === 1;
+          sn = new VF.StaveNote({ clef, keys: [e.restKey || rk[multi ? (vi === 0 ? 1 : 2) : 0]], duration: (full ? 'w' : dstr) + 'r', align_center: !!full });
+          if (!full) for (let k = 0; k < dots; k++) VF.Dot.buildAndAttach([sn], { all: true });
+        } else {
+          const opt = { clef, keys: e.notes.map((n) => keyStr(n.d)), duration: dstr };
+          if (multi) opt.stem_direction = vi === 0 ? 1 : -1; else opt.auto_stem = true;
+          sn = new VF.StaveNote(opt);
+          e.notes.forEach((n, i) => {
+            if (n.acc !== undefined) { if (n.acc) sn.addModifier(new VF.Accidental(n.acc), i); return; }   // 导入的曲谱：照原谱标的临时记号
+            const cur = (n.d in acc) ? acc[n.d] : ksig[mod(n.d, 7)];
+            if (n.a !== cur) { sn.addModifier(new VF.Accidental(ACC[n.a]), i); acc[n.d] = n.a; }
+          });
+          for (let k = 0; k < dots; k++) VF.Dot.buildAndAttach([sn], { all: true });
+        }
+        e.sn = sn; notes.push(sn); tick.push(sn);
+        if (e.tup) { const key = vi + ':' + e.tup; (tg[key] = tg[key] || []).push(e); }
+        pos = Math.max(pos, e.pos + e.dur);
       }
-      e.sn = sn; notes.push(sn);
-      if (e.tup) (tg[e.tup] = tg[e.tup] || []).push(sn);
-    }
-    const tuplets = Object.values(tg).filter((g) => g.length === 3).map((g) => new VF.Tuplet(g, { num_notes: 3, notes_occupied: 2, bracketed: false, ratioed: false }));
-    const beams = VF.Beam.generateBeams(notes, { groups: [ts.comp ? new VF.Fraction(3, 8) : new VF.Fraction(1, 4)] });
+      // 连音（三连音等）要在连符杠之前建：它会改变音符的时值，影响符杠分组
+      for (const [key, g] of Object.entries(tg)) {
+        if (!key.startsWith(vi + ':')) continue;
+        const t0 = g[0];
+        if (t0.tupN) tuplets.push(new VF.Tuplet(g.map((e) => e.sn), { num_notes: t0.tupN, notes_occupied: t0.tupM, ratioed: false }));
+        else if (g.length === 3) tuplets.push(new VF.Tuplet(g.map((e) => e.sn), { num_notes: 3, notes_occupied: 2, bracketed: false, ratioed: false }));
+      }
+      const voice = new VF.Voice({ num_beats: ts.n, beat_value: ts.d }).setMode(VF.Voice.Mode.SOFT).addTickables(tick);
+      voices.push(voice);
+      const vnotes = tick.filter((t) => t instanceof VF.StaveNote);
+      const opt = { groups: [ts.comp ? new VF.Fraction(3, 8) : new VF.Fraction(1, 4)] };
+      if (multi) opt.maintain_stem_directions = true;
+      try { beams.push(...VF.Beam.generateBeams(vnotes, opt)); } catch (er) { }
+    });
     // 修饰：跳音、重音、力度、指法（在符干方向确定后）
     for (const e of evs) {
       const sn = e.sn;
@@ -961,13 +1003,12 @@ function buildBarVF(ex, bar) {
       if (e.dyn) sn.addModifier(dynAnno(e.dyn), 0);
       if (e.finger) sn.addModifier(new VF.FretHandFinger(e.finger).setPosition(hand === 'rh' ? VF.Modifier.Position.ABOVE : VF.Modifier.Position.BELOW), hand === 'rh' ? e.notes.length - 1 : 0);
     }
-    const voice = new VF.Voice({ num_beats: ts.n, beat_value: ts.d }).setMode(VF.Voice.Mode.SOFT).addTickables(notes);
-    return { voice, beams, tuplets, notes };
+    return { voices, beams, tuplets, notes };
   };
-  const T = mk(bar.rh, 'treble', 'rh'), B = mk(bar.lh, 'bass', 'lh');
+  const T = mk(bar.rh, (bar.clef && bar.clef.rh) || 'treble', 'rh'), B = mk(bar.lh, (bar.clef && bar.clef.lh) || 'bass', 'lh');
   const fmt = new VF.Formatter();
-  fmt.joinVoices([T.voice]); fmt.joinVoices([B.voice]);
-  const minW = fmt.preCalculateMinTotalWidth([T.voice, B.voice]);
+  fmt.joinVoices(T.voices); fmt.joinVoices(B.voices);
+  const minW = fmt.preCalculateMinTotalWidth([...T.voices, ...B.voices]);
   bar.vf = { T, B, fmt, minW };
 }
 function dynAnno(t) {
@@ -996,17 +1037,20 @@ function renderAll(progressCb) {
   S.lay = { cw, pageH, nLines };
   S.rendered = new Set();
   if (S.io) S.io.disconnect();
-  LEVELS.forEach((L, li) => {
-    for (let ei = 0; ei < EX_PER_LEVEL; ei++) {
-      const ex = S.exs[S.levelStart[li] + ei];
-      const div = document.createElement('section'); div.className = 'ex'; div.id = 'ex' + ex.gi;
-      const tm = ex.ts.comp ? `♩. = ${Math.round(ex.bpm / 1.5)}` : `♩ = ${ex.bpm}`;
+  S.exs.forEach((ex) => {
+    const div = document.createElement('section'); div.className = 'ex'; div.id = 'ex' + ex.gi;
+    const tm = ex.ts.comp ? `♩. = ${Math.round(ex.bpm / 1.5)}` : `♩ = ${ex.bpm}`;
+    if (ex.learn) {
+      const tags = (ex.pageIdx === 0 ? [ex.key.cn, ex.ts.name, tm] : []).map((t) => `<span class="tag">${t}</span>`).join('');
+      div.innerHTML = `<div class="ex-head"><div class="ex-line"><span class="ex-no"><span class="lv">${escHtml(ex.title)}</span> 第 ${ex.barFrom}–${ex.barTo} 小节<small>/${ex.nBarsTotal}</small></span>${tags}<span class="ex-score" id="sc${ex.gi}"></span></div></div><div class="ex-body"></div>`;
+    } else {
+      const li = ex.li, ei = ex.ei, L = LEVELS[li];
       const tags = [ex.key.cn, ex.ts.name, tm, ex.texName, ex.swapped ? '左手旋律' : ''].filter(Boolean).map((t) => `<span class="tag">${t}</span>`).join('');
       const lvName = li === 0 ? '入门' : L.name;
       const banner = ei === 0 ? `<div class="lvl-banner"><b>${lvName}</b><span class="en">${L.en}</span><span>${L.desc}</span></div>` : '';
       div.innerHTML = `<div class="ex-head">${banner}<div class="ex-line"><span class="ex-no"><span class="lv">${lvName}</span> 练习 ${ei + 1}<small>/${EX_PER_LEVEL}</small></span>${ex.title ? `<span class="ex-title">${ex.title}</span>` : ''}${tags}<span class="ex-score" id="sc${ex.gi}"></span></div></div><div class="ex-body"></div>`;
-      score.appendChild(div);
     }
+    score.appendChild(div);
   });
   // 一共几百首，全部画出来手机吃不消：只画当前页附近的，滑到哪里画到哪里
   S.io = new IntersectionObserver((ents) => {
@@ -1053,8 +1097,10 @@ function lineGeom(ex, ln) {
   let rhMax = 38, rhMin = 30, lhMax = 26, lhMin = 18, dyn = false;
   ln.forEach((i) => {
     const b = ex.bars[i];
-    b.rh.forEach((e) => { if (e.dyn) dyn = true; e.notes.forEach((n) => { rhMax = Math.max(rhMax, n.d); rhMin = Math.min(rhMin, n.d); }); });
-    b.lh.forEach((e) => e.notes.forEach((n) => { lhMax = Math.max(lhMax, n.d); lhMin = Math.min(lhMin, n.d); }));
+    // 上谱表用低音谱号、下谱表用高音谱号时，音在谱表上的位置差 12 个音级
+    const offR = b.clef && b.clef.rh === 'bass' ? 12 : 0, offL = b.clef && b.clef.lh === 'treble' ? -12 : 0;
+    b.rh.forEach((e) => { if (e.dyn) dyn = true; e.notes.forEach((n) => { rhMax = Math.max(rhMax, n.d + offR); rhMin = Math.min(rhMin, n.d + offR); }); });
+    b.lh.forEach((e) => e.notes.forEach((n) => { lhMax = Math.max(lhMax, n.d + offL); lhMin = Math.min(lhMin, n.d + offL); }));
   });
   // VexFlow 的第一线在 y+40；按实际音域留出上下空间
   const above = Math.max(22, (rhMax - 38) * 5 + 20);
@@ -1099,11 +1145,22 @@ function renderExercise(ex, div, cw, pageH, nLines, li) {
       const bar = ex.bars[i];
       const w = widths[i] * scale + (k === 0 ? mods : 0);
       const top = new VF.Stave(x, trebleY, w), bot = new VF.Stave(x, bassY, w);
+      const prev = ex.bars[i - 1] || ex.prevBar;
+      const clefOf = (b, h) => (b && b.clef && b.clef[h]) || (h === 'rh' ? 'treble' : 'bass');
+      const keyOf = (b) => ((b && b.key) || ex.key).name, tsOf = (b) => ((b && b.ts) || ex.ts).name;
       if (k === 0) {
-        top.addClef('treble').addKeySignature(ex.key.name); bot.addClef('bass').addKeySignature(ex.key.name);
-        if (first) { top.addTimeSignature(ex.ts.name); bot.addTimeSignature(ex.ts.name); }
-        if (!first) top.setMeasure(i + 1);
-      } else { top.setBegBarType(VF.Barline.type.NONE); bot.setBegBarType(VF.Barline.type.NONE); }
+        top.addClef(clefOf(bar, 'rh')).addKeySignature(keyOf(bar)); bot.addClef(clefOf(bar, 'lh')).addKeySignature(keyOf(bar));
+        const showTs = ex.learn ? (first && ex.showTs) || (prev && tsOf(prev) !== tsOf(bar)) : first;
+        if (showTs) { top.addTimeSignature(tsOf(bar)); bot.addTimeSignature(tsOf(bar)); }
+        if (!first || ex.learn) top.setMeasure(bar.num || i + 1);
+      } else {
+        top.setBegBarType(VF.Barline.type.NONE); bot.setBegBarType(VF.Barline.type.NONE);
+        // 行中间换谱号、调号、拍号（只有导入的曲谱会出现）
+        if (clefOf(prev, 'rh') !== clefOf(bar, 'rh')) top.addClef(clefOf(bar, 'rh'), 'small');
+        if (clefOf(prev, 'lh') !== clefOf(bar, 'lh')) bot.addClef(clefOf(bar, 'lh'), 'small');
+        if (keyOf(prev) !== keyOf(bar)) { top.addKeySignature(keyOf(bar), keyOf(prev)); bot.addKeySignature(keyOf(bar), keyOf(prev)); }
+        if (tsOf(prev) !== tsOf(bar)) { top.addTimeSignature(tsOf(bar)); bot.addTimeSignature(tsOf(bar)); }
+      }
       const isEnd = i === ex.bars.length - 1;
       if (isEnd) { top.setEndBarType(VF.Barline.type.END); bot.setEndBarType(VF.Barline.type.END); }
       top.setContext(ctx); bot.setContext(ctx);
@@ -1118,8 +1175,8 @@ function renderExercise(ex, div, cw, pageH, nLines, li) {
       const { T, B, fmt } = bar.vf;
       T.notes.forEach((n) => n.setStave(top)); B.notes.forEach((n) => n.setStave(bot));
       const noteW = top.getNoteEndX() - sx - 14;
-      fmt.format([T.voice, B.voice], Math.max(30, noteW));
-      T.voice.draw(ctx, top); B.voice.draw(ctx, bot);
+      fmt.format([...T.voices, ...B.voices], Math.max(30, noteW));
+      T.voices.forEach((v) => v.draw(ctx, top)); B.voices.forEach((v) => v.draw(ctx, bot));
       [...T.beams, ...B.beams].forEach((b) => b.setContext(ctx).draw());
       [...T.tuplets, ...B.tuplets].forEach((t) => t.setContext(ctx).draw());
       // 光标锚点：每个起音位置的 x
@@ -1138,10 +1195,29 @@ function renderExercise(ex, div, cw, pageH, nLines, li) {
       x += w;
       bar.vf = null; // 释放
     });
+    drawTies(ex, ln, ctx);
     sysObj.idx = S.systems.length;
     S.systems.push(sysObj);
   });
   ex.zoom = zoom;
+  if (ex.learn) learnAfterRender(ex);
+}
+// 连音线：同一行内画完整的；跨行、跨页的两头各画半条
+function drawTies(ex, ln, ctx) {
+  const inLine = new Set(ln.map((i) => ex.bars[i]));
+  for (const i of ln) for (const h of ['rh', 'lh']) for (const e of ex.bars[i][h]) {
+    if (e.rest || !e.sn) continue;
+    e.notes.forEach((n, ni) => {
+      try {
+        if (n.tieTo) {
+          const t = n.tieTo;
+          if (inLine.has(t.e.bar) && t.e.sn) new VF.StaveTie({ first_note: e.sn, last_note: t.e.sn, first_indices: [ni], last_indices: [t.i] }).setContext(ctx).draw();
+          else new VF.StaveTie({ first_note: e.sn, last_note: null, first_indices: [ni], last_indices: [ni] }).setContext(ctx).draw();
+        }
+        if (n.tieFrom && !inLine.has(n.tieFrom.e.bar)) new VF.StaveTie({ first_note: null, last_note: e.sn, first_indices: [ni], last_indices: [ni] }).setContext(ctx).draw();
+      } catch (er) { }
+    });
+  }
 }
 function computeSystemGeometry(ex) {
   S.systems.forEach((s) => {
@@ -1252,6 +1328,7 @@ function practiceHand(h) { return S.settings.hand === 'both' || S.settings.hand 
 
 async function startPlay() {
   await AU.init();
+  if (LM.active) return learnStartPlay();
   const { ex: exI, bar: bI } = S.cur;
   const ex = S.exs[exI];
   P.curEx = exI; P.visEx = exI; P.stopAt = null; P.vq = []; clearHighlights();
@@ -1294,7 +1371,9 @@ function schedule() {
   while (P.nextIdx < S.ev.length) {
     const e = S.ev[P.nextIdx];
     const ex = S.exs[P.curEx];
+    if (LM.active && e.t0 >= LM.endT0 - 1e-6) { if (learnWrap()) continue; return; }
     if (e.t0 >= ex.endT0 - 1e-6) {
+      if (LM.active) { P.curEx = Math.min(P.curEx + 1, S.exs.length - 1); continue; }
       if (S.settings.loop) {
         const at = ctxTimeOf(ex.endT0);
         P.anchors.push({ ctx: at, t0: ex.startT0, f: P.anchors[P.anchors.length - 1].f });
@@ -1318,11 +1397,14 @@ function schedule() {
     }
     P.nextIdx++;
   }
+  if (LM.active && P.nextIdx >= S.ev.length && ctxTimeOf(LM.endT0) <= horizon) learnWrap();
 }
 function setSpeed(v) {
   S.settings.speed = v; saveSettings();
-  if (P.playing && P.mode === 'play') { const now = AU.ctx.currentTime; P.anchors.push({ ctx: now, t0: posT0(now), f: factor() }); P.anchors = P.anchors.filter((a, i, arr) => i >= arr.length - 3); }
+  // 已经排好“下一遍从头开始”的时间点时不插新锚点（新速度从下一遍生效）
+  if (P.playing && P.mode === 'play') { const now = AU.ctx.currentTime; if (!P.anchors.some((a) => a.ctx > now)) { P.anchors.push({ ctx: now, t0: posT0(now), f: factor() }); P.anchors = P.anchors.filter((a, i, arr) => i >= arr.length - 3); } }
   updateSpeedLabel();
+  learnOnSpeed(v);
 }
 function locateBar(t) {
   const b = barAtT0(t);
@@ -1413,6 +1495,7 @@ function frame() {
     if (P.mode === 'play') {
       while (P.anchors.length > 1 && P.anchors[1].ctx <= now) P.anchors.shift();
       if (P.pendingReset && now >= P.pendingReset.at) { showScore(P.pendingReset.ex); resetScore(P.pendingReset.ex); P.pendingReset = null; }
+      if (P.pendingPass && now >= P.pendingPass.at) { const pp = P.pendingPass; P.pendingPass = null; if (P.pendingCountIn) { P.countIn = P.pendingCountIn; P.pendingCountIn = null; } learnPassEnd(pp); if (!P.playing) return requestAnimationFrame(frame); }
       const t = posT0(now);
       if (P.countIn && t >= P.countIn.to) P.countIn = null;
       // 开始后的头 0.12 秒 t 还在起点之前，会落到上一首的最后一小节，这里按起点算
@@ -1431,14 +1514,17 @@ function frame() {
           cursor.badge.style.display = 'block';
         } else cursor.badge.style.display = 'none';
         if (lastStatusBar !== bar) { lastStatusBar = bar; updateStatus(bar); }
-        if (bar.ex !== P.visEx) { showScore(P.visEx); P.visEx = bar.ex; resetScore(bar.ex); }
+        if (bar.ex !== P.visEx) { if (LM.active) P.visEx = bar.ex; else { showScore(P.visEx); P.visEx = bar.ex; resetScore(bar.ex); } }
         sweepMisses(t);
       }
       if (P.stopAt !== null && now >= P.stopAt) {
         const lastEx = S.exs[P.curEx];
         stopPlay(false);
-        S.cur = { ex: Math.min(P.curEx + (S.settings.cont ? 0 : 1), S.exs.length - 1), bar: 0 };
-        if (lastEx) showScore(lastEx.gi);
+        if (LM.active) S.cur = learnRangeStartCur();
+        else {
+          S.cur = { ex: Math.min(P.curEx + (S.settings.cont ? 0 : 1), S.exs.length - 1), bar: 0 };
+          if (lastEx) showScore(lastEx.gi);
+        }
         placeIdleCursor();
       }
     } else if (P.mode === 'follow') followFrame(dt);
@@ -1450,6 +1536,7 @@ function frame() {
 const MIDI = { connected: false, access: null, held: new Set() };
 const SC = {}; // 每首练习的分数
 function resetScore(gi, fromT0 = -1) {
+  if (LM.active) return learnResetScore(fromT0);
   SC[gi] = { hit: 0, miss: 0, wrong: 0, exp: [], idx: 0 };
   const ex = S.exs[gi];
   ex.bars.forEach((b) => ['rh', 'lh'].forEach((h) => b[h].forEach((e) => { if (e.el) e.el.classList.remove('hit', 'miss', 'expect'); e.hitN = 0; })));
@@ -1458,13 +1545,17 @@ function resetScore(gi, fromT0 = -1) {
   const el = document.getElementById('sc' + gi); if (el) el.textContent = '';
   hud();
 }
+// 当前用哪一份分数：学曲子模式按“一遍”统计（跨页），视奏练习按每首统计
+function scKey() { return LM.active ? 'L' : (P.mode === 'follow' ? P.curEx : P.visEx); }
+function barStat(sc, bar) { if (!sc.bars || !bar) return null; const k = bar.gidx ?? bar.bi; return (sc.bars[k] = sc.bars[k] || { exp: 0, hit: 0, wrong: 0 }); }
 function sweepMisses(t) {
   if (!MIDI.connected) return;
-  const sc = SC[P.visEx]; if (!sc) return;
+  const sc = SC[scKey()]; if (!sc) return;
   const W = 0.25 * factor();
   while (sc.idx < sc.exp.length && sc.exp[sc.idx].t0 < t - W) {
     const x = sc.exp[sc.idx];
     if (!x.hit) { sc.miss++; if (x.e.el) x.e.el.classList.add('miss'); }
+    const bs = barStat(sc, x.e.bar); if (bs) { bs.exp++; if (x.hit) bs.hit++; }
     sc.idx++;
   }
 }
@@ -1474,13 +1565,15 @@ const noteName = (m) => NOTE_NAMES[m % 12] + (Math.floor(m / 12) - 1);
 const HUD = { note: '', noteT: 0, last: '' };
 function hud() {
   const el = document.getElementById('midiHud'); if (!el) return;
-  if (!MIDI.connected) { el.classList.remove('on'); return; }
+  if (!MIDI.connected && !LM.active) { el.classList.remove('on'); return; }
   const parts = [];
+  if (!MIDI.connected) { el.innerHTML = `<span>${LM.hud}</span>`; el.classList.add('on'); return; }   // 学曲子模式、没连 MIDI：只显示练习进度
   if (HUD.note && performance.now() - HUD.noteT < 1500) parts.push('🎹 ' + HUD.note); else parts.push('🎹');
-  const sc = SC[P.mode === 'follow' ? P.curEx : P.visEx];
+  const sc = SC[scKey()];
   if (P.playing && sc && sc.exp.length) parts.push(`✓${sc.hit} ✗${sc.miss} 错${sc.wrong}`);
   else if (!P.playing) parts.push('按 ▶ 播放后跟着弹');
-  if (HUD.last) parts.push(HUD.last);
+  if (LM.active && LM.hud) parts.push(LM.hud);
+  else if (HUD.last) parts.push(HUD.last);
   el.innerHTML = parts.map((x) => `<span>${x}</span>`).join('');
   el.classList.add('on');
 }
@@ -1492,8 +1585,9 @@ function onNoteOn(m, vel) {
   if (S.settings.midiSound && AU.ctx) AU.note(m, AU.ctx.currentTime, 0.6, 0.4 + vel / 200);
   if (!P.playing) return;
   if (P.mode === 'follow') return followNote(m);
-  const sc = SC[P.visEx]; if (!sc) return;
+  const sc = SC[scKey()]; if (!sc) return;
   const t = posT0(AU.ctx.currentTime);
+  if (P.countIn && t < P.countIn.to - 0.25 * factor()) return;   // 预备拍里按的键不算
   const W = 0.25 * factor();
   let found = null;
   for (let i = Math.max(0, lowerBound(sc.exp, t - W)); i < sc.exp.length && sc.exp[i].t0 <= t + W; i++) {
@@ -1503,15 +1597,16 @@ function onNoteOn(m, vel) {
     found.hit = true; sc.hit++;
     found.e.hitN = (found.e.hitN || 0) + 1;
     if (found.e.el && found.e.hitN >= found.e.notes.length) { found.e.el.classList.remove('miss'); found.e.el.classList.add('hit'); }
-  } else sc.wrong++;
+  } else { sc.wrong++; const bs = barStat(sc, locateBar(t)); if (bs) bs.wrong++; }
   updateLiveScore();
 }
 function onNoteOff(m) { keyHl(m, false, 'user'); }
 function updateLiveScore() {
-  const sc = SC[P.mode === 'follow' ? P.curEx : P.visEx]; if (!sc) return;
+  const sc = SC[scKey()]; if (!sc) return;
   hud();
 }
 function showScore(gi) {
+  if (LM.active) return;
   const sc = SC[gi]; if (!sc || !MIDI.connected) return;
   const tot = sc.exp.length; if (!tot) return;
   const pct = Math.round((100 * sc.hit) / tot);
@@ -1558,14 +1653,18 @@ function startFollow() {
   P.mode = 'follow'; P.playing = true;
   const ex = S.exs[S.cur.ex];
   FOL.idx = lowerBound(S.ons, ex.bars[S.cur.bar].t0);
+  if (LM.active) FOL.idx = lowerBound(S.ons, learnFollowStartT0());
   prepFollow();
   updatePlayBtn();
 }
 function prepFollow() {
   if (FOL.timer) { clearTimeout(FOL.timer); FOL.timer = null; }
   const o = S.ons[FOL.idx];
+  if (!o && LM.active) { learnFollowPassEnd(); return; }
   if (!o) { stopPlay(false); return; }
   ensureRendered(o.ex);
+  if (LM.active && (o.t0 >= LM.endT0 - 1e-6 || !o)) { learnFollowPassEnd(); return; }
+  if (LM.active && o.ex !== P.curEx) P.curEx = o.ex;
   if (o.ex !== P.curEx) {
     showScore(P.curEx);
     if (S.settings.loop) { const ex = S.exs[P.curEx]; FOL.idx = lowerBound(S.ons, ex.startT0); resetScore(P.curEx); return prepFollow(); }
@@ -1573,7 +1672,7 @@ function prepFollow() {
     P.curEx = o.ex; resetScore(o.ex);
   }
   FOL.need = new Set(); FOL.got = new Set();
-  for (const e of o.evs) if (practiceHand(e.hand)) { e.notes.forEach((n) => FOL.need.add(n.midi)); if (e.el) e.el.classList.add('expect'); }
+  for (const e of o.evs) if (practiceHand(e.hand)) { e.notes.forEach((n) => { if (!n.tieStop) FOL.need.add(n.midi); }); if (e.el) e.el.classList.add('expect'); }
   updateStatus(o.bar);
   if (!FOL.need.size) {
     playOthers(o);
@@ -1589,22 +1688,22 @@ function playOthers(o) {
   for (const e of o.evs) {
     if (practiceHand(e.hand) || !handPlays(e.hand)) continue;
     const dur = e.dur * spt(ex) / factor();
-    e.notes.forEach((n) => AU.note(n.midi, now, dur, 0.55));
+    e.notes.forEach((n) => { if (!n.tieStop) AU.note(n.midi, now, (n.tieDur || e.dur) * spt(ex) / factor(), 0.55); });
     P.vq.push({ on: now, off: now + dur, n: e, midi: e.notes[0].midi, started: false });
   }
 }
 function followNote(m) {
-  const sc = SC[P.curEx];
+  const sc = SC[scKey()];
   if (FOL.need.has(m)) {
     FOL.got.add(m);
     if ([...FOL.need].every((x) => FOL.got.has(x))) {
       const o = S.ons[FOL.idx];
       for (const e of o.evs) if (practiceHand(e.hand) && e.el) { e.el.classList.remove('expect'); e.el.classList.add('hit'); }
-      if (sc) sc.hit += FOL.need.size;
+      if (sc) { sc.hit += FOL.need.size; const bs = barStat(sc, o.bar); if (bs) { bs.exp += FOL.need.size; bs.hit += FOL.need.size; } }
       playOthers(o);
       FOL.idx++; prepFollow();
     }
-  } else { if (sc) sc.wrong++; flashKey(m); }
+  } else { if (sc) { sc.wrong++; const bs = barStat(sc, S.ons[FOL.idx] && S.ons[FOL.idx].bar); if (bs) bs.wrong++; } flashKey(m); }
   updateLiveScore();
 }
 function flashKey(m) { const k = KBD.keys[m]; if (!k) return; k.classList.add('bad'); setTimeout(() => k.classList.remove('bad'), 250); }
@@ -1635,6 +1734,7 @@ function buildKeyboard() {
 
 /* ======================= UI ======================= */
 function $(id) { return document.getElementById(id); }
+function escHtml(t) { return String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 3200); }
 function updatePlayBtn() { $('bPlay').innerHTML = P.playing ? '❚❚ 暂停' : '▶ 播放'; $('bPlay').classList.toggle('on', P.playing); hud(); }
 function updateSpeedLabel() {
@@ -1644,7 +1744,9 @@ function updateSpeedLabel() {
   $('spd').value = S.settings.speed;
 }
 function updateStatus(bar) {
-  const ex = S.exs[bar.ex]; const L = LEVELS[ex.li];
+  const ex = S.exs[bar.ex];
+  if (ex.learn) { $('status').innerHTML = `<b>${escHtml(ex.title)}</b> <span class="long">第 </span>${bar.num}/${ex.nBarsTotal}<span class="long"> 小节</span>`; updateSpeedLabel(); return; }
+  const L = LEVELS[ex.li];
   $('status').innerHTML = `<b>${ex.li === 0 ? '入门' : L.name}</b> <span class="long">练习 </span>${ex.ei + 1}/${EX_PER_LEVEL} · <span class="long">第 </span>${bar.bi + 1}/${ex.bars.length}<span class="long"> 小节</span>`;
   if ($('selLevel').value !== String(ex.li)) $('selLevel').value = String(ex.li);
   updateSpeedLabel();
@@ -1659,7 +1761,7 @@ function seek(exI, barI, scroll = true) {
   saveSettings();
   if (was) startPlay();
 }
-function saveSettings() { try { localStorage.setItem('sr.settings', JSON.stringify(S.settings)); localStorage.setItem('sr.lastLevel', String(S.exs[S.cur.ex]?.li ?? 0)); } catch (e) { } }
+function saveSettings() { try { localStorage.setItem('sr.settings', JSON.stringify(S.settings)); if (!LM.active) localStorage.setItem('sr.lastLevel', String(S.exs[S.cur.ex]?.li ?? 0)); } catch (e) { } }
 function loadSettings() {
   // 矮屏（手机横屏）默认不显示屏幕键盘，把高度留给谱面
   S.settings.kbd = Math.min(window.innerWidth, window.innerHeight) >= 520;
@@ -1726,6 +1828,7 @@ function initUI() {
     const r = sys.getBoundingClientRect();
     const x = (e.clientX - r.left) / s.zoom;
     let bar = s.bars.find((b) => x >= b.x0 && x < b.x1) || s.bars[s.bars.length - 1];
+    if (LM.active && LM.picking) { learnPickBar(bar); return; }
     seek(bar.ex, bar.bi, false);
   });
   window.addEventListener('keydown', (e) => {
@@ -1761,11 +1864,13 @@ function initUI() {
     const t = e.changedTouches[0]; const dx = t.clientX - tx, dy = t.clientY - ty;
     if (performance.now() - tt < 600 && Math.abs(dx) > 70 && Math.abs(dy) < 45) { (dx < 0 ? $('bNext') : $('bPrev')).click(); }
   }, { passive: true });
+  learnInitUI();
   // 切到后台时暂停（iOS 会挂起声音）
   document.addEventListener('visibilitychange', () => { if (document.hidden && P.playing) stopPlay(true); });
 }
 async function rerender() {
   const was = P.playing; if (was) stopPlay(true);
+  if (LM.active) return learnRebuild();
   const cur = { ...S.cur };
   $('loading').classList.add('show');
   await renderAll((f) => { $('loadBar').style.width = Math.round(f * 100) + '%'; });
@@ -1810,8 +1915,9 @@ async function main() {
   const seed = Number.isFinite(h) && h > 0 ? h : Math.floor(Math.random() * 900000) + 100000;
   let lvl = 0; try { lvl = clamp(parseInt(localStorage.getItem('sr.lastLevel') || '0', 10) || 0, 0, LEVELS.length - 1); } catch (e) { }
   await regenerate(seed, lvl);
+  await learnRestore();
   requestAnimationFrame(frame);
   try { if (!localStorage.getItem('sr.seenHelp')) { $('help').classList.add('show'); localStorage.setItem('sr.seenHelp', '1'); } } catch (e) { }
 }
-window.__SR = { ensureRendered, AU, MIDI, onNoteOn, FOL, SC, posT0, setSpeed, S, P, genExercise, validatePiece, LEVELS, EX_PER_LEVEL, generateAll, seek, startPlay, stopPlay, buildBarVF, modsWidth };
+window.__SR = { unrollOrder, pop909ToPiece, pop909clToPiece, pop909Load, get POP909() { return POP909; }, get LM() { return LM; }, get SCL() { return SC.L; }, learnPages, parseMusicXML, parseMidi, midiToPiece, unzipMusicXML, inflateJS, learnEnter, learnExit, buildTimeline, renderAll, ensureRendered, AU, MIDI, onNoteOn, FOL, SC, posT0, setSpeed, S, P, genExercise, validatePiece, LEVELS, EX_PER_LEVEL, generateAll, seek, startPlay, stopPlay, buildBarVF, modsWidth };
 window.addEventListener('DOMContentLoaded', main);
