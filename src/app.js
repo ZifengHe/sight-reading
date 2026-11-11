@@ -1193,9 +1193,14 @@ function renderExercise(ex, div, cw, pageH, nLines, li) {
       T.notes.forEach((n) => n.setStave(top)); B.notes.forEach((n) => n.setStave(bot));
       const noteW = top.getNoteEndX() - sx - 14;
       fmt.format([...T.voices, ...B.voices], Math.max(30, noteW));
-      T.voices.forEach((v) => v.draw(ctx, top)); B.voices.forEach((v) => v.draw(ctx, bot));
-      [...T.beams, ...B.beams].forEach((b) => b.setContext(ctx).draw());
-      [...T.tuplets, ...B.tuplets].forEach((t) => t.setContext(ctx).draw());
+      // 每只手画在自己的组里（单手练习时另一只手画成浅色）
+      for (const [h, V, st] of [['rh', T, top], ['lh', B, bot]]) {
+        ctx.openGroup('h' + h);
+        V.voices.forEach((v) => v.draw(ctx, st));
+        V.beams.forEach((b) => b.setContext(ctx).draw());
+        V.tuplets.forEach((t) => t.setContext(ctx).draw());
+        ctx.closeGroup();
+      }
       // 光标锚点：每个起音位置的 x
       const pts = new Map();
       for (const h of ['rh', 'lh']) for (const e of bar[h]) {
@@ -1222,7 +1227,7 @@ function renderExercise(ex, div, cw, pageH, nLines, li) {
 // 连音线：同一行内画完整的；跨行、跨页的两头各画半条
 function drawTies(ex, ln, ctx) {
   const inLine = new Set(ln.map((i) => ex.bars[i]));
-  for (const i of ln) for (const h of ['rh', 'lh']) for (const e of ex.bars[i][h]) {
+  for (const h of ['rh', 'lh']) { ctx.openGroup('h' + h); for (const i of ln) for (const e of ex.bars[i][h]) {
     if (e.rest || !e.sn) continue;
     e.notes.forEach((n, ni) => {
       try {
@@ -1234,8 +1239,9 @@ function drawTies(ex, ln, ctx) {
         if (n.tieFrom && !inLine.has(n.tieFrom.e.bar)) new VF.StaveTie({ first_note: null, last_note: e.sn, first_indices: [ni], last_indices: [ni] }).setContext(ctx).draw();
       } catch (er) { }
     });
-  }
+  } ctx.closeGroup(); }
 }
+function updateHandDim() { const h = S.settings.hand; document.body.classList.toggle('dim-lh', h === 'rh'); document.body.classList.toggle('dim-rh', h === 'lh'); }
 function computeSystemGeometry(ex) {
   S.systems.forEach((s) => {
     if (!s || (ex && s.ex !== ex.gi)) return;
@@ -1659,6 +1665,7 @@ async function connectMidi() {
       MIDI.connected = n > 0;
       document.getElementById('bMidi').textContent = n ? `🎹 已连接 ${n} 个 MIDI 设备` : '🎹 未发现 MIDI 设备（插上后重试）';
       document.getElementById('cFollow').disabled = !MIDI.connected;
+      if (LM.active) { learnHudUpdate(); learnUpdatePanel(); }
       if (MIDI.connected && P.playing && P.mode === 'play' && AU.ctx && (!SC[P.visEx] || !SC[P.visEx].exp.length)) resetScore(P.visEx, posT0(AU.ctx.currentTime));
       hud();
     };
@@ -1791,6 +1798,7 @@ function applySettingsToUI() {
   $('cCont').checked = st.cont; $('cScroll').checked = st.scroll; $('cKbd').checked = st.kbd; $('vol').value = st.vol; $('zoom').value = st.scale;
   $('cMidiSound').checked = st.midiSound; $('selCount').value = String(st.countIn || 1);
   document.body.classList.toggle('nokbd', !st.kbd);
+  updateHandDim();
   updateSpeedLabel();
 }
 async function regenerate(seed, keepLevel) {
@@ -1824,7 +1832,7 @@ function initUI() {
   $('spdUp').onclick = () => setSpeed(clamp(S.settings.speed + 5, 30, 150));
   $('cMetro').onchange = (e) => { S.settings.metro = e.target.checked; saveSettings(); };
   $('selSound').onchange = (e) => { S.settings.sound = e.target.value; saveSettings(); };
-  $('selHand').onchange = (e) => { S.settings.hand = e.target.value; saveSettings(); };
+  $('selHand').onchange = (e) => { S.settings.hand = e.target.value; saveSettings(); updateHandDim(); };
   $('cLoop').onchange = (e) => { S.settings.loop = e.target.checked; saveSettings(); };
   $('cCont').onchange = (e) => { S.settings.cont = e.target.checked; saveSettings(); };
   $('cScroll').onchange = (e) => { S.settings.scroll = e.target.checked; saveSettings(); };
@@ -1938,5 +1946,5 @@ async function main() {
   // 通过歌曲链接打开时直接看谱，不弹使用说明
   try { if (!localStorage.getItem('sr.seenHelp') && !isSongLink(initHash)) { $('help').classList.add('show'); localStorage.setItem('sr.seenHelp', '1'); } } catch (e) { }
 }
-window.__SR = { unrollOrder, pop909ToPiece, pop909clToPiece, pop909Load, get POP909() { return POP909; }, get LM() { return LM; }, get SCL() { return SC.L; }, learnPages, parseMusicXML, parseMidi, midiToPiece, unzipMusicXML, inflateJS, learnEnter, learnExit, buildTimeline, renderAll, ensureRendered, AU, MIDI, onNoteOn, FOL, SC, posT0, setSpeed, S, P, genExercise, validatePiece, LEVELS, EX_PER_LEVEL, generateAll, seek, startPlay, stopPlay, buildBarVF, modsWidth };
+window.__SR = { planGo, planStepLabel, planSteps, unrollOrder, pop909ToPiece, pop909clToPiece, pop909Load, get POP909() { return POP909; }, get LM() { return LM; }, get SCL() { return SC.L; }, learnPages, parseMusicXML, parseMidi, midiToPiece, unzipMusicXML, inflateJS, learnEnter, learnExit, buildTimeline, renderAll, ensureRendered, AU, MIDI, onNoteOn, FOL, SC, posT0, setSpeed, S, P, genExercise, validatePiece, LEVELS, EX_PER_LEVEL, generateAll, seek, startPlay, stopPlay, buildBarVF, modsWidth };
 window.addEventListener('DOMContentLoaded', main);

@@ -42,6 +42,12 @@ button,label,#top,#kbd{-webkit-user-select:none;user-select:none}
 #learnPanel{position:absolute;left:0;right:0;top:100%;border-top:1px solid #3a3f49;background:#262a32;box-shadow:0 8px 20px rgba(0,0,0,.3);max-height:calc(100vh - 60px);overflow-y:auto}
 #learnPanel .row{font-size:13px}
 #learnPanel [hidden]{display:none!important}
+.lplan{max-height:220px;overflow-y:auto;width:100%;font-size:13px;background:#1f2229;border:1px solid #3a3f49;border-radius:6px;position:relative}
+.lplan ol{margin:6px 0;padding-left:36px}
+.lplan li{padding:1px 0;color:#c8ccd4}
+.lplan li.done{color:#7d8593}
+.lplan li.cur{color:#fff;font-weight:600;background:rgba(47,111,222,.35)}
+body.dim-lh .vf-hlh,body.dim-rh .vf-hrh{opacity:.28}
 #learnPanel input[type=number]{width:58px;background:var(--bar2);color:var(--barTxt);border:1px solid #3c414c;border-radius:6px;padding:4px 6px}
 #top .lbtn{background:var(--accent);color:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;font-weight:600}
 .lnote{flex-basis:100%;color:#cfd6e6;font-size:12.5px;line-height:1.55;white-space:normal}
@@ -210,7 +216,7 @@ body.nomidi .midi{display:none!important}
   </div>
   <div id="learnPanel" hidden>
     <div class="row">
-      <div id="lIntro" class="lnote"><b>学曲子</b>：载入你自己的曲谱文件（MusicXML、.mxl 或 MIDI），选几小节反复练，用“速度阶梯”或“从后往前”一步步过关。连上 MIDI 键盘会自动判断每遍弹得对不对，并标出最容易错的小节。曲谱只保存在这台设备上。</div>
+      <div id="lIntro" class="lnote"><b>学曲子</b>：载入你自己的曲谱文件（MusicXML、.mxl 或 MIDI），App 自动排好学习计划（分段、分手、逐步提速），你按顺序一步步过关。连上 MIDI 键盘会自动判断每遍弹得对不对，并标出最容易错的小节。曲谱只保存在这台设备上。</div>
       <label class="lbtn">📂 载入曲谱文件<input type="file" id="lFile" hidden></label>
       <label>我的曲子 <select id="lPiece"></select></label>
       <button id="lOpen">打开</button>
@@ -220,18 +226,22 @@ body.nomidi .midi{display:none!important}
       <textarea id="lLinkBox" hidden readonly rows="2"></textarea>
       <div id="lLinkNote" class="lnote" hidden></div>
       <span class="lbreak lneed"></span>
-      <label class="lneed">范围 第 <input id="lA" type="number" min="1" inputmode="numeric"> – <input id="lB" type="number" min="1" inputmode="numeric"> 小节 <small id="lTotal"></small></label>
-      <button id="lAll" class="lneed">整首</button>
-      <button id="lPick" class="lneed">👆 在谱上点选范围</button>
+      <label class="lneed lmanual">范围 第 <input id="lA" type="number" min="1" inputmode="numeric"> – <input id="lB" type="number" min="1" inputmode="numeric"> 小节 <small id="lTotal"></small></label>
+      <button id="lAll" class="lneed lmanual">整首</button>
+      <button id="lPick" class="lneed lmanual">👆 在谱上点选范围</button>
       <span class="lbreak lneed"></span>
-      <label class="lneed">练法 <select id="lMethod"><option value="free">自由循环</option><option value="ladder">速度阶梯</option><option value="back">从后往前</option></select></label>
+      <label class="lneed">练法 <select id="lMethod"><option value="plan">学习计划（推荐）</option><option value="free">自由循环</option><option value="ladder">速度阶梯</option><option value="back">从后往前</option></select></label>
       <label id="lLadderOpts" class="lneed">起始速度 <select id="lStart"><option>40</option><option>45</option><option>50</option><option>55</option><option>60</option><option>65</option><option>70</option><option>75</option><option>80</option><option>85</option><option>90</option></select>% 每次加 <select id="lStep"><option>5</option><option>10</option></select>%</label>
       <label id="lBackOpts" class="lneed">每次往前加 <select id="lChunk"><option>1</option><option>2</option><option>4</option></select> 小节</label>
-      <label class="lneed">过关：连续弹对 <select id="lNeed"><option>2</option><option>3</option><option>5</option></select> 遍</label>
+      <label class="lneed lmanual">过关：连续弹对 <select id="lNeed"><option>2</option><option>3</option><option>5</option></select> 遍</label>
       <label class="lneed"><input type="checkbox" id="lLoop" checked> 循环播放</label>
       <label class="lneed"><input type="checkbox" id="lHeat" checked> 标出易错小节</label>
       <button id="lOk" class="lneed">✓ 这遍弹对了</button>
+      <button id="lPlanPrev" class="lneed lplanonly">◀ 上一步</button>
+      <button id="lPlanSkip" class="lneed lplanonly">跳过这步 ▶</button>
+      <button id="lPlanReset" class="lneed lplanonly">从第 1 步重来</button>
       <div id="lStatus" class="lnote lneed"></div>
+      <div id="lPlan" class="lplan" hidden></div>
       <div id="lLog" class="lnote lneed"></div>
       <button id="lClear" class="lneed">清除这首的记录</button>
       <span class="lbreak"></span>
@@ -282,13 +292,14 @@ body.nomidi .midi{display:none!important}
   <h3>学曲子（📖 按钮）</h3>
   <ul>
     <li><b>载入曲谱</b>：点“📖 学曲子 → 📂 载入曲谱文件”，选 MusicXML（.musicxml / .xml / .mxl）或 MIDI（.mid）文件。MuseScore 等打谱软件都能导出 MusicXML。曲谱只存在这台设备上。</li>
-    <li><b>选范围</b>：输入起止小节，或点“👆 在谱上点选范围”后在谱上点两下。范围会循环播放，每遍之间有一小节预备拍。</li>
+    <li><b>学习计划（默认，推荐）</b>：App 把曲子切成每段 4 小节（约一句），按顺序安排好每一步，你只管按 ▶ 弹。每段：没学过的手先单手练（等待模式 → 70% → 原速），另一只手由 App 弹、谱上画成浅色；再双手（等待模式 → 60% → 80% → 原速）；和前面学过的小节一样的手不再单独练。从第二段起每段和上一段连起来；每 4 段连成一大段；最后整首。每步连续弹对 2 遍（原速 3 遍）自动进入下一步。等待模式需要 MIDI 键盘：你弹对了光标才往前走；没连 MIDI 时这一步改成 50% 慢速。手动调慢速度或换手，那一遍不计。练法里还可以选“上一步”“跳过这步”“从第 1 步重来”。</li>
+    <li><b>选范围</b>（自由循环、速度阶梯、从后往前时）：输入起止小节，或点“👆 在谱上点选范围”后在谱上点两下。范围会循环播放，每遍之间有一小节预备拍。</li>
     <li><b>速度阶梯</b>：从较慢的速度开始（例如 60%），连续弹对几遍（默认 3 遍）就自动加快 5%，一直到原速。</li>
     <li><b>从后往前</b>：先练范围的最后一两小节，过关后自动往前加一段，越往后越熟，每次都完整弹到结尾。</li>
-    <li><b>判断“弹对”</b>：连上 MIDI 键盘时自动判断（没有漏音、错音不超过 1 个）；没有 MIDI 时，自己觉得弹对了就点“✓ 这遍弹对了”。</li>
+    <li><b>判断“弹对”</b>：连上 MIDI 键盘时自动判断（60 个音以内：没有漏音、错音不超过 1 个；更长的段落每 60 个音允许错 1 个）；没有 MIDI 时，自己觉得弹对了就点“✓ 这遍弹对了”。</li>
     <li><b>易错小节</b>：每遍的对错按小节累计，越常错的小节底色越红，下次先练那几小节。“我弹”选右手或左手就是分手练习，另一只手由电脑弹。</li>
-    <li><b>每首曲子一个链接</b>：打开一首曲子后点“🔗 这首曲子的链接”，把链接发给自己（微信、iMessage 都行），在 iPhone 上用 MIDIWeb Browser 打开就直接进入这首曲子，不用再传文件。曲库里的歌链接很短；自己的曲谱整份压缩在链接里（不上传到任何地方），链接较长，只发给自己。</li>
-    <li>有反复记号的曲子会按演奏顺序展开，小节号按展开后的顺序编。D.C.、D.S. 不展开。</li>
+    <li><b>每首曲子一个链接</b>：打开一首曲子后点“🔗 这首曲子的链接”，把链接发给自己（微信、iMessage 都行），在 iPhone 上用 MIDIWeb Browser 打开就直接进入这首曲子，不用再传文件。曲库里的歌链接很短；自己的曲谱交给 Claude 加密上传后也是短链接（密钥只在链接里），否则整份压缩在链接里，链接较长。只发给自己。</li>
+    <li>有反复记号的曲子（包括 D.C.、D.S.、Fine、Coda）会按演奏顺序展开，小节号按展开后的顺序编。</li>
   </ul>
   <h3>快捷键</h3>
   <p><kbd>空格</kbd> 播放/暂停　<kbd>←</kbd><kbd>→</kbd>（或 <kbd>PgUp</kbd><kbd>PgDn</kbd>）上一首/下一首　<kbd>↑</kbd><kbd>↓</kbd> 速度　<kbd>M</kbd> 节拍器　<kbd>L</kbd> 循环</p>

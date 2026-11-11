@@ -855,11 +855,12 @@ function learnPages(piece) {
 
 /* ---------------- 练习数据 ---------------- */
 function learnDefaults(n) {
-  return { a: 1, b: Math.min(n, 8), method: 'free', ladder: { start: 60, step: 5, speed: 60 }, back: { chunk: 2, stage: 1 }, need: 3, streak: 0, speed: 80, heat: true, loop: true, stats: {}, log: [], days: {} };
+  return { a: 1, b: Math.min(n, 8), method: 'plan', plan: { i: 0 }, planV: 1, ladder: { start: 60, step: 5, speed: 60 }, back: { chunk: 2, stage: 1 }, need: 3, streak: 0, speed: 80, heat: true, loop: true, stats: {}, log: [], days: {} };
 }
 function learnSave() { if (LM.id && LM.data) lsSet('sr.learn.' + LM.id, LM.data); }
 function learnActiveRange() {
   const D = LM.data, n = LM.bars.length;
+  if (planOn() && !planDone()) { const st = planStep(); return { a: st.a, b: st.b }; }
   let a = clamp(D.a, 1, n), b = clamp(D.b, a, n);
   if (D.method === 'back') { const C = D.back.chunk; const stages = Math.ceil((b - a + 1) / C); const s = clamp(D.back.stage, 1, stages); a = Math.max(a, b - s * C + 1); }
   return { a, b };
@@ -873,8 +874,156 @@ function learnSetRangeT0() {
 function learnRangeStartCur() { const R = learnActiveRange(); const b = LM.bars[R.a - 1]; return { ex: b.ex, bar: b.bi }; }
 function learnFollowStartT0() { return LM._followFrom ?? LM.startT0; }
 
+/* ---------------- 学习计划：自动切段、分手、提速，按步骤过关 ---------------- */
+const HAND_CN = { rh: '右手', lh: '左手', both: '双手' };
+// 一小节一只手的内容（用来找重复的小节）
+function barSig(bar, h) { return bar[h].filter((e) => !e.rest).map((e) => `${e.pos}:${e.dur}:${e.notes.filter((n) => !n.tieStop).map((n) => n.midi).join('.')}`).join(' '); }
+// 切段：每段 4 小节（约一句）；2/4 这类短小节用 8 小节；音特别密时用 2 小节；
+// 弱起小节并进第一段；最后剩下太短的并进最后一段
+function planSegments(bars) {
+  const n = bars.length, segs = [];
+  const tsLen = (b) => (b.ts && b.ts.len) || b.len;
+  const nEv = (b) => b.rh.filter((e) => !e.rest).length + b.lh.filter((e) => !e.rest).length;
+  const pickup = n > 1 && bars[0].len < tsLen(bars[0]) - 1e-6;
+  let i = 0;
+  while (i < n) {
+    let L = tsLen(bars[i]) * 4 < 250 ? 8 : 4;
+    const span = bars.slice(i, i + L);
+    if (span.reduce((a, b) => a + nEv(b), 0) / span.length > 24) L = L / 2;
+    let b = Math.min(n, i + L + (pickup && i === 0 ? 1 : 0));
+    if (n - b > 0 && n - b < Math.ceil(L / 2)) b = n;
+    segs.push({ a: i + 1, b });
+    i = b;
+  }
+  return segs;
+}
+// 生成全部步骤。每段：没学过的手先单手（等待模式 → 70% → 原速），再双手（等待模式 → 60% → 80% → 原速）；
+// 两只手都和前面学过的小节基本一样时只复习（双手 80% → 原速）。从第二段起每段和上一段连起来练；
+// 每 4 段（约 16 小节）连成一大段；最后整首。
+function planSteps(piece) {
+  const bars = piece.bars, segs = planSegments(bars);
+  const seen = { rh: new Set(), lh: new Set() };
+  const steps = [];
+  const add = (s) => steps.push(Object.assign({ wait: false, speed: 100, need: 2, kind: 'learn' }, s));
+  let blk = 0;   // 当前大段从第几段开始
+  const addRun = (k) => {
+    const a = segs[blk].a, b = segs[k].b;
+    if (k - blk >= 1 && !(a === 1 && b === bars.length)) {
+      add({ a, b, seg: k + 1, hand: 'both', speed: 80, kind: 'run' });
+      add({ a, b, seg: k + 1, hand: 'both', speed: 100, kind: 'run' });
+    }
+    blk = k + 1;
+  };
+  segs.forEach((sg, k) => {
+    const bs = bars.slice(sg.a - 1, sg.b);
+    const has = {}, isNew = {};
+    for (const h of ['rh', 'lh']) {
+      const sigs = bs.map((b) => barSig(b, h));
+      has[h] = sigs.some((s) => s);
+      isNew[h] = has[h] && sigs.filter((s) => s && !seen[h].has(s)).length / bs.length > 0.25;
+      sigs.forEach((s) => s && seen[h].add(s));
+    }
+    if (!has.rh && !has.lh) return;
+    const R = { a: sg.a, b: sg.b, seg: k + 1 };
+    const both = has.rh && has.lh;
+    const hh = both ? 'both' : has.rh ? 'rh' : 'lh';
+    if (both) for (const h of ['rh', 'lh']) if (isNew[h]) {
+      add({ ...R, hand: h, wait: true });
+      add({ ...R, hand: h, speed: 70 });
+      add({ ...R, hand: h, speed: 100 });
+    }
+    if (isNew.rh || isNew.lh) {
+      add({ ...R, hand: hh, wait: true });
+      add({ ...R, hand: hh, speed: 60 });
+      add({ ...R, hand: hh, speed: 80 });
+    } else add({ ...R, hand: hh, speed: 80, kind: 'review' });
+    add({ ...R, hand: hh, speed: 100, need: 3 });
+    if (k > 0) {
+      const pv = segs[k - 1];
+      add({ a: pv.a, b: sg.b, seg: k + 1, hand: 'both', speed: 80, kind: 'join' });
+      add({ a: pv.a, b: sg.b, seg: k + 1, hand: 'both', speed: 100, need: 3, kind: 'join' });
+    }
+    if ((k + 1) % 4 === 0) addRun(k);
+  });
+  if (blk < segs.length - 1) addRun(segs.length - 1);
+  if (segs.length > 2) {
+    add({ a: 1, b: bars.length, seg: segs.length, hand: 'both', speed: 80, kind: 'whole' });
+    add({ a: 1, b: bars.length, seg: segs.length, hand: 'both', speed: 100, need: 3, kind: 'whole' });
+  }
+  return { segs, steps };
+}
+function planOn() { return LM.active && LM.data && LM.data.method === 'plan' && LM.plan && LM.plan.steps.length > 0; }
+function planIdx() { return clamp(LM.data.plan.i, 0, LM.plan.steps.length - 1); }
+function planStep() { return planOn() ? LM.plan.steps[planIdx()] : null; }
+function planDone() { return planOn() && LM.data.plan.i >= LM.plan.steps.length; }
+// 本步实际用的速度：等待模式（需要 MIDI）不看速度；没连 MIDI 时等待模式换成 50% 慢速
+function planSpeed(st) { return st.wait ? 50 : st.speed; }
+function planSpeedText(st) { return st.wait ? (MIDI.connected ? '等待模式' : '50% 慢速') : `${st.speed}%`; }
+function planStepLabel(st) {
+  const pre = { join: '连接 ', run: '大段 ', whole: '整首 ', review: '复习 ', learn: '' }[st.kind];
+  return `${pre}第${st.a}–${st.b}小节 · ${HAND_CN[st.hand]} · ${planSpeedText(st)}`;
+}
+function planWhy(st) {
+  const other = st.hand === 'rh' ? '左手' : '右手';
+  if (st.kind === 'join') return '把上一段和这一段连起来，练段落之间的衔接。';
+  if (st.kind === 'run') return `把这几段连成一大段（第 ${st.a}–${st.b} 小节）。`;
+  if (st.kind === 'whole') return '所有段落都学过了：整首连起来。';
+  if (st.kind === 'review') return '这一段和前面学过的小节基本一样，双手直接复习。';
+  if (st.hand !== 'both') {
+    if (st.wait) return MIDI.connected ? `先单手认音：等待模式下你弹对了光标才往前走，不用管节奏。${other}由 App 弹，谱上画成浅色。` : `先单手认音，慢速。${other}由 App 弹，谱上画成浅色。`;
+    return `${HAND_CN[st.hand]}跟着拍子弹，${other}由 App 弹（浅色）。`;
+  }
+  if (st.wait) return MIDI.connected ? '双手合起来：等待模式，先找准两只手的配合，不用管节奏。' : '双手合起来，慢速，先找准两只手的配合。';
+  return `双手跟着节拍器弹，${st.speed}%。`;
+}
+// 把本步的设置套上：范围、哪只手、声音、等待模式、速度、节拍器
+function planApply() {
+  const st = planStep(); if (!st) return;
+  const D = LM.data;
+  D.a = st.a; D.b = st.b;
+  S.settings.hand = st.hand; S.settings.sound = 'others';
+  S.settings.follow = !!(st.wait && MIDI.connected);
+  S.settings.metro = st.hand === 'both' && !st.wait;
+  $('selHand').value = st.hand; $('selSound').value = 'others'; $('cMetro').checked = S.settings.metro;
+  const cf = $('cFollow'); if (cf) cf.checked = S.settings.follow;
+  updateHandDim();
+  if (S.settings.speed !== planSpeed(st)) setSpeed(planSpeed(st)); else saveSettings();
+}
+// 这一遍是不是按本步的要求弹的（手动改了手或调慢了速度就不计）
+function planPassValid() {
+  if (!planOn() || planDone()) return true;
+  const st = planStep();
+  if (S.settings.hand !== st.hand) { toast(`这一步要求${HAND_CN[st.hand]}，这遍不计`); return false; }
+  if (!st.wait && S.settings.speed < st.speed) { toast(`这一步要求速度 ${st.speed}%，这遍是 ${S.settings.speed}%，不计`); return false; }
+  return true;
+}
+function planGo(i, why) {
+  const D = LM.data; const N = LM.plan.steps.length;
+  D.plan.i = clamp(i, 0, N); D.streak = 0;
+  learnSave();
+  if (D.plan.i >= N) { learnRestart(); toast(why || '🎉 学习计划全部完成！'); return; }
+  learnRestart(planApply);
+  if (why) toast(why);
+}
+function planJudgeDone() {
+  const D = LM.data; const N = LM.plan.steps.length; const i = planIdx(); const st = LM.plan.steps[i];
+  learnLog({ d: today(), a: st.a, b: st.b, m: 'plan', st: i + 1, of: N, h: st.hand, sp: planSpeedText(st) });
+  if (i + 1 >= N) { planGo(N, `🎉 第 ${N}/${N} 步过关，《${LM.piece.title}》整首原速弹下来了！`); return; }
+  const nx = LM.plan.steps[i + 1];
+  planGo(i + 1, `🎉 第 ${i + 1} 步过关！下一步：${planStepLabel(nx)}`);
+}
+function planRenderList() {
+  const box = $('lPlan'); if (!box) return;
+  if (!planOn()) { box.hidden = true; return; }
+  box.hidden = false;
+  const cur = LM.data.plan.i;
+  box.innerHTML = '<ol>' + LM.plan.steps.map((st, i) => `<li class="${i < cur ? 'done' : i === cur ? 'cur' : ''}">${i < cur ? '✓ ' : ''}${planStepLabel(st)}</li>`).join('') + '</ol>';
+  const c = box.querySelector('li.cur'); if (c && !box.hidden) box.scrollTop = Math.max(0, c.offsetTop - box.clientHeight / 2);
+}
+
 /* ---------------- 播放、评分 ---------------- */
 function learnStartPlay() {
+  if (planOn() && !planDone()) planApply();
   const R = learnSetRangeT0();
   let sb = LM.bars[R.a - 1];
   const cex = S.exs[S.cur.ex]; const cb = cex && cex.bars[S.cur.bar];
@@ -931,7 +1080,8 @@ function learnPassEnd(pp) {
   let clean = null;
   if (sc && MIDI.connected && sc.exp.length + sc.hit > 0) {
     const exp = P.mode === 'follow' ? sc.hit : sc.exp.length;
-    clean = sc.miss === 0 && sc.wrong <= 1 && sc.hit >= exp;
+    // 60 个音以内：不漏音、错音不超过 1 个；更长的段落每 60 个音允许 1 个错（漏音 + 错音）
+    clean = exp <= 60 ? sc.miss === 0 && sc.wrong <= 1 && sc.hit >= exp : sc.miss + sc.wrong <= Math.floor(exp / 60);
     for (const [g, s] of Object.entries(sc.bars || {})) {
       const t = (D.stats[g] = D.stats[g] || { exp: 0, hit: 0, wrong: 0, passes: 0 });
       t.exp += s.exp; t.hit += s.hit; t.wrong += s.wrong; t.passes++;
@@ -941,7 +1091,8 @@ function learnPassEnd(pp) {
     if (clean && pp.full) { day.clean++; day.best = Math.max(day.best, S.settings.speed); }
     const pct = Math.round((100 * sc.hit) / Math.max(1, exp));
     HUD.last = `这遍 ${pct}%`;
-    if (!pp.full) toast(`这遍从中间开始，不计入过关（弹对 ${sc.hit}/${exp}，错音 ${sc.wrong}）`);
+    if (pp.full && !planPassValid()) { }
+    else if (!pp.full) toast(`这遍从中间开始，不计入过关（弹对 ${sc.hit}/${exp}，错音 ${sc.wrong}）`);
     else learnJudge(clean, `弹对 ${sc.hit}/${exp}，错音 ${sc.wrong}`);
   }
   learnSave(); learnPaint(); learnUpdatePanel();
@@ -951,11 +1102,13 @@ function learnPassEnd(pp) {
 function learnJudge(clean, detail) {
   const D = LM.data;
   const ok = clean ? '✓ 弹对' : '✗ 没过';
-  if (D.method === 'free') { toast(`${ok}（${detail}）`); learnHudUpdate(); return; }
-  if (!clean) { D.streak = 0; toast(`${ok}（${detail}），从 0/${D.need} 重新数`); learnHudUpdate(); return; }
+  if (D.method === 'free' || planDone()) { toast(`${ok}（${detail}）`); learnHudUpdate(); return; }
+  const need = planOn() ? planStep().need : D.need;
+  if (!clean) { D.streak = 0; toast(`${ok}（${detail}），从 0/${need} 重新数`); learnHudUpdate(); return; }
   D.streak++;
-  if (D.streak < D.need) { toast(`${ok}（${detail}）：连续 ${D.streak}/${D.need}`); learnHudUpdate(); return; }
+  if (D.streak < need) { toast(`${ok}（${detail}）：连续 ${D.streak}/${need}`); learnHudUpdate(); learnSave(); return; }
   D.streak = 0;
+  if (planOn()) { planJudgeDone(); return; }
   const R = learnActiveRange();
   if (D.method === 'ladder') {
     const sp = S.settings.speed;
@@ -1002,7 +1155,9 @@ function learnHudUpdate() {
   if (!LM.active) { LM.hud = ''; return hud(); }
   const D = LM.data; const R = learnActiveRange();
   const rng = `第${R.a}–${R.b}小节`;
-  if (D.method === 'ladder') LM.hud = `${rng} · 阶梯 ${S.settings.speed}% · ${D.streak}/${D.need}`;
+  if (planDone()) LM.hud = '🎉 学习计划已完成 · ' + rng + ' · 循环';
+  else if (planOn()) { const st = planStep(); LM.hud = `${planIdx() + 1}/${LM.plan.steps.length}步 ${HAND_CN[st.hand]} ${st.wait && MIDI.connected ? '等待' : planSpeed(st) + '%'} ${D.streak}/${st.need}`; }
+  else if (D.method === 'ladder') LM.hud = `${rng} · 阶梯 ${S.settings.speed}% · ${D.streak}/${D.need}`;
   else if (D.method === 'back') LM.hud = `${rng} · 倒练 ${D.back.stage}/${learnBackStages()} 步 · ${D.streak}/${D.need}`;
   else LM.hud = rng + ' · 循环';
   hud();
@@ -1010,7 +1165,9 @@ function learnHudUpdate() {
 }
 function learnStatusText() {
   const D = LM.data; const R = learnActiveRange();
-  const judge = MIDI.connected ? '每遍结束自动判断（没有漏音、错音不超过 1 个算弹对）' : '没有连接 MIDI：每弹对一遍，点“✓ 这遍弹对了”';
+  const judge = MIDI.connected ? '每遍结束自动判断（60 个音以内：没有漏音、错音不超过 1 个算弹对；更长的段落每 60 个音允许错 1 个）' : '没有连接 MIDI：每弹对一遍，点“✓ 这遍弹对了”';
+  if (planDone()) return `学习计划 ${LM.plan.steps.length} 步全部完成。现在是整首自由循环；想再从头走一遍计划，点“从第 1 步重来”。`;
+  if (planOn()) { const st = planStep(); return `学习计划第 ${planIdx() + 1}/${LM.plan.steps.length} 步：${planStepLabel(st)}。${planWhy(st)}连续弹对 ${st.need} 遍过关，已经 ${D.streak}/${st.need}。${judge}。`; }
   if (D.method === 'ladder') return `速度阶梯：现在 ${S.settings.speed}%，第 ${R.a}–${R.b} 小节已连续弹对 ${D.streak}/${D.need} 遍。${judge}。`;
   if (D.method === 'back') return `从后往前：第 ${D.back.stage}/${learnBackStages()} 步，现在练第 ${R.a}–${R.b} 小节，已连续弹对 ${D.streak}/${D.need} 遍。${judge}。`;
   return `自由循环：第 ${R.a}–${R.b} 小节反复播放。${MIDI.connected ? '每遍结束显示成绩。' : ''}`;
@@ -1061,16 +1218,22 @@ async function learnEnter(id) {
   let piece;
   try { piece = await learnLoadPieceData(id); } catch (e) { $('loading').classList.remove('show'); toast('打不开：' + e.message); return false; }
   // 从视奏练习进来时记下视奏的速度，退出时恢复（刷新页面后直接回到学曲子时不能覆盖它）
-  if (!LM.active && lsGet('sr.mode', 'sight') !== 'learn') lsSet('sr.sightSpeed', S.settings.speed);
+  if (!LM.active && lsGet('sr.mode', 'sight') !== 'learn') { lsSet('sr.sightSpeed', S.settings.speed); lsSet('sr.sightPrefs', { hand: S.settings.hand, sound: S.settings.sound, metro: S.settings.metro }); }
   LM.active = true; LM.id = id; LM.piece = piece; LM.bars = piece.bars;
   LM.data = Object.assign(learnDefaults(piece.bars.length), lsGet('sr.learn.' + id, {}));
   LM.data.a = clamp(LM.data.a, 1, piece.bars.length); LM.data.b = clamp(LM.data.b, LM.data.a, piece.bars.length);
+  if (!LM.data.planV) { LM.data.planV = 1; LM.data.method = 'plan'; LM.data.streak = 0; }   // 旧记录：默认改用学习计划
+  if (!LM.data.plan) LM.data.plan = { i: 0 };
+  LM.plan = planSteps(piece);
+  LM.data.plan.i = clamp(LM.data.plan.i, 0, LM.plan.steps.length);
   LM.loop = LM.data.loop !== false;
   lsSet('sr.mode', 'learn'); lsSet('sr.lastPiece', id);
   document.body.classList.add('learning');
   S.settings.speed = LM.data.method === 'ladder' ? LM.data.ladder.speed : LM.data.speed; updateSpeedLabel();
+  if (planOn() && !planDone()) planApply();
   $('learnPanel').hidden = true;
   await learnRebuild(true);
+  if (planOn() && !planDone()) toast(`学习计划第 ${planIdx() + 1}/${LM.plan.steps.length} 步：${planStepLabel(planStep())}。按 ▶ 开始`);
   return true;
 }
 async function learnRebuild(fresh) {
@@ -1092,7 +1255,11 @@ async function learnExit() {
   LM.active = false; LM.picking = null; LM.hud = '';
   document.body.classList.remove('learning', 'lpicking');
   lsSet('sr.mode', 'sight');
-  S.settings.speed = lsGet('sr.sightSpeed', 100); saveSettings();
+  S.settings.speed = lsGet('sr.sightSpeed', 100);
+  const sp = lsGet('sr.sightPrefs', null);
+  if (sp) { S.settings.hand = sp.hand; S.settings.sound = sp.sound; S.settings.metro = !!sp.metro; $('selHand').value = sp.hand; $('selSound').value = sp.sound; $('cMetro').checked = !!sp.metro; }
+  S.settings.follow = false; const cf = $('cFollow'); if (cf) cf.checked = false;
+  updateHandDim(); saveSettings();
   $('learnPanel').hidden = true;
   let lvl = 0; try { lvl = clamp(parseInt(localStorage.getItem('sr.lastLevel') || '0', 10) || 0, 0, LEVELS.length - 1); } catch (e) { }
   await regenerate(S.seed, lvl);
@@ -1219,19 +1386,22 @@ function learnUpdatePanel() {
   document.querySelectorAll('.lneed').forEach((n) => { n.hidden = !LM.active; });
   if (!LM.active || LM._linkFor !== LM.id) { $('lLinkBox').hidden = true; $('lLinkNote').hidden = true; }
   $('lIntro').hidden = LM.active;
-  if (!LM.active) return;
+  if (!LM.active) { $('lPlan').hidden = true; return; }
   const D = LM.data, n = LM.bars.length;
   $('lA').max = n; $('lB').max = n; $('lA').value = D.a; $('lB').value = D.b; $('lTotal').textContent = `共 ${n} 小节`;
   $('lMethod').value = D.method; $('lStep').value = String(D.ladder.step); $('lStart').value = String(D.ladder.start);
   $('lChunk').value = String(D.back.chunk); $('lNeed').value = String(D.need);
   $('lLoop').checked = LM.loop; $('lHeat').checked = D.heat;
   $('lLadderOpts').hidden = D.method !== 'ladder'; $('lBackOpts').hidden = D.method !== 'back';
+  document.querySelectorAll('.lmanual').forEach((x) => { x.hidden = D.method === 'plan'; });
+  document.querySelectorAll('.lplanonly').forEach((x) => { x.hidden = D.method !== 'plan'; });
+  planRenderList();
   $('lOk').hidden = MIDI.connected || D.method === 'free';
   $('lStatus').textContent = learnStatusText();
   // 进度
   const days = Object.entries(D.days).sort((a, b) => (a[0] < b[0] ? 1 : -1)).slice(0, 5);
   const dayHtml = days.map(([d, x]) => `<li>${d.slice(5)}：练了 ${x.passes} 遍，弹对 ${x.clean} 遍${x.best ? `，弹对时最高速度 ${x.best}%` : ''}</li>`).join('');
-  const logHtml = D.log.slice(0, 8).map((x) => `<li>${x.d.slice(5)} 第 ${x.a}–${x.b} 小节：${x.m === 'ladder' ? `${x.sp}% 过关` : `从后往前第 ${x.st}/${x.of} 步过关（${x.sp}%）`}</li>`).join('');
+  const logHtml = D.log.slice(0, 8).map((x) => `<li>${x.d.slice(5)} 第 ${x.a}–${x.b} 小节：${x.m === 'plan' ? `计划第 ${x.st}/${x.of} 步过关（${HAND_CN[x.h] || ''} ${x.sp}）` : x.m === 'ladder' ? `${x.sp}% 过关` : `从后往前第 ${x.st}/${x.of} 步过关（${x.sp}%）`}</li>`).join('');
   $('lLog').innerHTML = (dayHtml ? `<b>每天</b><ul>${dayHtml}</ul>` : '') + (logHtml ? `<b>过关记录</b><ul>${logHtml}</ul>` : '') || '<span class="muted">还没有记录。连上 MIDI 弹几遍，这里会显示每天的进步。</span>';
 }
 function learnInitUI() {
@@ -1293,7 +1463,8 @@ function learnInitUI() {
   $('lPick').onclick = () => { LM.picking = 'a'; document.body.classList.add('lpicking'); panel.hidden = true; toast('在谱上点起点小节'); };
   $('lMethod').onchange = (e) => {
     const D = LM.data; D.method = e.target.value; D.streak = 0; D.back.stage = 1;
-    if (D.method === 'ladder') learnRestart(() => { D.ladder.speed = D.ladder.start; setSpeed(D.ladder.start); });
+    if (D.method === 'plan') learnRestart(planApply);
+    else if (D.method === 'ladder') learnRestart(() => { D.ladder.speed = D.ladder.start; setSpeed(D.ladder.start); });
     else learnRestart();
     learnSave();
   };
@@ -1304,6 +1475,9 @@ function learnInitUI() {
   $('lLoop').onchange = (e) => { LM.loop = e.target.checked; LM.data.loop = LM.loop; learnSave(); };
   $('lHeat').onchange = (e) => { LM.data.heat = e.target.checked; learnSave(); learnPaint(); };
   $('lOk').onclick = () => { if (LM.active) { learnJudge(true, '手动确认'); learnSave(); learnUpdatePanel(); } };
+  $('lPlanPrev').onclick = () => { if (planOn()) planGo(Math.min(LM.data.plan.i, LM.plan.steps.length) - 1, null); };
+  $('lPlanSkip').onclick = () => { if (planOn() && !planDone()) planGo(LM.data.plan.i + 1, null); };
+  $('lPlanReset').onclick = () => { if (planOn() && confirm('学习计划从第 1 步重新开始？（易错统计和记录保留）')) planGo(0, null); };
   $('lClear').onclick = () => { if (!confirm('清除这首曲子的易错统计和进度记录？')) return; const D = LM.data; D.stats = {}; D.log = []; D.days = {}; D.streak = 0; learnSave(); learnPaint(); learnUpdatePanel(); };
 }
 // 速度：学曲子时单独记（不影响视奏练习的速度）
