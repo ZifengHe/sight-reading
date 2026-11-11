@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>录下来分析</title>
+<style>
+:root{--bg:#efe9dc;--paper:#fffdf7;--ink:#1c1c1e;--muted:#6d6a63;--line:#e2dccd;--accent:#2f6fde;--rec:#c0392b;--ok:#1c9a52;--warn:#c98a00;--bad:#d23f3f;--note:#3d5a80;--roll:#f6f1e4}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#17191e;--paper:#20232a;--ink:#e9e6df;--muted:#9aa0ab;--line:#353a45;--accent:#6c9bf0;--rec:#e2574a;--ok:#4cc38a;--warn:#e0b040;--bad:#f07070;--note:#9db8dc;--roll:#1b1e24}}
+:root[data-theme="dark"]{--bg:#17191e;--paper:#20232a;--ink:#e9e6df;--muted:#9aa0ab;--line:#353a45;--accent:#6c9bf0;--rec:#e2574a;--ok:#4cc38a;--warn:#e0b040;--bad:#f07070;--note:#9db8dc;--roll:#1b1e24}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans CJK SC",sans-serif;-webkit-text-size-adjust:100%;
+  padding:env(safe-area-inset-top) max(16px,env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+main{max-width:860px;margin:0 auto}
+h1{font-size:20px;margin:16px 0 2px}
+h2{font-size:16px;margin:22px 0 8px}
+.sub{color:var(--muted);font-size:13px;margin:0 0 12px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:12px 0}
+.btns{display:flex;gap:12px;flex-wrap:wrap}
+button{font:inherit;font-weight:700;font-size:17px;border:none;border-radius:12px;padding:14px 22px;color:#fff;cursor:pointer;flex:1 1 200px;min-height:54px}
+#bRec{background:var(--rec)}
+#bRec.on{animation:pulse 1.2s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.65}}
+@media (prefers-reduced-motion:reduce){#bRec.on{animation:none}}
+#bAna{background:var(--accent)}
+button:disabled{opacity:.4;cursor:default}
+#midi{font-size:13px;color:var(--muted);margin-top:10px;word-break:break-all}
+#midi.ok{color:var(--ok)}
+#midi.bad{color:var(--bad)}
+#live{font-size:15px;margin-top:8px;font-variant-numeric:tabular-nums;min-height:24px}
+#live b{color:var(--accent)}
+ol.adv{margin:0;padding-left:22px}
+ol.adv li{margin:0 0 14px}
+ol.adv .t{font-weight:700}
+ol.adv .how{color:var(--muted)}
+ul.good{margin:0;padding-left:20px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+td{padding:5px 8px 5px 0;border-bottom:1px solid var(--line);vertical-align:top}
+td:first-child{color:var(--muted);white-space:nowrap;width:1%}
+td{font-variant-numeric:tabular-nums}
+#rollBox{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--roll)}
+#roll{display:block}
+.legend{font-size:12.5px;color:var(--muted);margin-top:6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 10px;vertical-align:-1px}
+.caveat{font-size:13px;color:var(--muted)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+<h1>录下来分析</h1>
+<p class="sub">随便弹什么都行。按 Record 开始，弹完按 StartAnalysis。录的是 MIDI 键盘的按键数据，只留在这台设备上。</p>
+<div class="card">
+  <div class="btns">
+    <button id="bRec">● Record</button>
+    <button id="bAna" disabled>StartAnalysis</button>
+  </div>
+  <div id="midi">正在找 MIDI 键盘…</div>
+  <div id="live"></div>
+</div>
+<div id="out" hidden>
+  <div class="card"><h2 style="margin-top:0">建议（按重要程度排）</h2><ol class="adv" id="adv"></ol></div>
+  <div class="card" id="goodBox"><h2 style="margin-top:0">做得好的</h2><ul class="good" id="good"></ul></div>
+  <div class="card"><h2 style="margin-top:0">这次录音的数据</h2><table id="facts"></table></div>
+  <div class="card"><h2 style="margin-top:0">你弹的每一个音</h2>
+    <div id="rollBox"><canvas id="roll"></canvas></div>
+    <div class="legend">横向是时间，纵向是音高，颜色越深按得越重。<i style="background:var(--bad)"></i>卡顿<i style="background:var(--warn)"></i>抢拍<i style="background:#8e5bd0"></i>蹭到的音。上方曲线是速度。</div>
+  </div>
+  <p class="caveat">说明：这里没有乐谱，所以判断不了音弹得对不对，只能从你实际弹出来的时间、力度、时值里找问题。自由速度（rubato）的音乐会被当成"不稳"，这种情况请忽略节奏方面的建议。</p>
+</div>
+</main>
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const R = { rec: false, t0: 0, notes: [], pedal: [], open: new Map(), midi: null, timer: 0 };
+const now = () => performance.now() / 1000;
+const NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+const nn = (m) => NAMES[m % 12] + (Math.floor(m / 12) - 1);
+const mmss = (t) => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0');
+const median = (a) => { if (!a.length) return 0; const s = a.slice().sort((x, y) => x - y), n = s.length; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; };
+const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0);
+const std = (a) => { if (a.length < 2) return 0; const m = mean(a); return Math.sqrt(mean(a.map((x) => (x - m) * (x - m)))); };
+
+/* ---------- MIDI ---------- */
+function onMsg(ev) {
+  const d = ev.data; if (!d || d.length < 2) return;
+  const st = d[0] & 0xf0, a = d[1], b = d.length > 2 ? d[2] : 0;
+  if (st === 0x90 && b > 0) noteOn(a, b);
+  else if (st === 0x80 || (st === 0x90 && b === 0)) noteOff(a);
+  else if (st === 0xb0 && a === 64) { if (R.rec) R.pedal.push({ t: now() - R.t0, on: b >= 64 }); }
+}
+function noteOn(m, v) {
+  $('live').dataset.last = nn(m);
+  if (!R.rec) { liveText(); return; }
+  noteOff(m);
+  const n = { t: now() - R.t0, d: 0, m, v }; R.notes.push(n); R.open.set(m, n); liveText();
+}
+function noteOff(m) { const n = R.open.get(m); if (n) { n.d = Math.max(0.01, now() - R.t0 - n.t); R.open.delete(m); } }
+function bind(acc) {
+  R.midi = acc;
+  const refresh = () => {
+    const names = [];
+    acc.inputs.forEach((inp) => { inp.onmidimessage = onMsg; names.push(inp.name || 'MIDI'); });
+    const el = $('midi');
+    if (names.length) { el.className = 'ok'; el.textContent = '已连接：' + names.join('、') + '。按一个琴键试试，下面会显示音名。'; }
+    else { el.className = 'bad'; el.textContent = '浏览器支持 MIDI，但没找到键盘。请用 USB 接上键盘（接好后会自动识别）。'; }
+  };
+  acc.onstatechange = refresh; refresh();
+}
+function initMidi() {
+  let tries = 0;
+  const go = () => {
+    if (R.midi) return;
+    if (navigator.requestMIDIAccess) { navigator.requestMIDIAccess().then(bind, () => { $('midi').className = 'bad'; $('midi').textContent = 'MIDI 权限被拒绝。请在浏览器里允许使用 MIDI 设备后刷新。'; }); return; }
+    // MIDIWeb Browser 这类 App 会晚一点才注入 requestMIDIAccess，等 10 秒
+    if (++tries < 20) setTimeout(go, 500);
+    else { $('midi').className = 'bad'; $('midi').textContent = '这个浏览器不支持 MIDI。电脑上请用 Chrome 或 Edge；iPhone / iPad 上请用 MIDIWeb Browser 打开本页。'; }
+  };
+  go();
+}
+
+/* ---------- 录音 ---------- */
+function liveText() {
+  const el = $('live'), last = el.dataset.last ? '　刚按的键：<b>' + el.dataset.last + '</b>' : '';
+  if (R.rec) el.innerHTML = '正在录：' + mmss(now() - R.t0) + '　已录 <b>' + R.notes.length + '</b> 个音' + last;
+  else if (R.notes.length) el.innerHTML = '已录好 ' + R.notes.length + ' 个音，按 StartAnalysis 分析；再按 Record 会重新录。' + last;
+  else el.innerHTML = last ? last.trim() : '';
+}
+function startRec() {
+  R.rec = true; R.t0 = now(); R.notes = []; R.pedal = []; R.open.clear();
+  $('bRec').textContent = '■ Stop'; $('bRec').classList.add('on'); $('bAna').disabled = false; $('out').hidden = true;
+  R.timer = setInterval(liveText, 500); liveText();
+}
+function stopRec() {
+  if (!R.rec) return;
+  [...R.open.keys()].forEach(noteOff);
+  R.rec = false; clearInterval(R.timer);
+  $('bRec').textContent = '● Record'; $('bRec').classList.remove('on');
+  // 从第一个音开始算时间
+  if (R.notes.length) { const s = R.notes[0].t; R.notes.forEach((n) => (n.t -= s)); R.pedal.forEach((p) => (p.t = Math.max(0, p.t - s))); }
+  $('bAna').disabled = !R.notes.length;
+  try { localStorage.setItem('sr.rec', JSON.stringify({ notes: R.notes, pedal: R.pedal })); } catch (e) { }
+  liveText();
+}
+
+/* ---------- 分析 ---------- */
+const KS = [[1, 1], [0.5, 0.9], [2, 0.9], [0.25, 0.7], [1.5, 0.7], [3, 0.7], [4, 0.7], [0.75, 0.6], [1 / 3, 0.6], [2 / 3, 0.5]];
+function clusters(notes) {
+  const out = []; let c = null;
+  for (const n of notes.slice().sort((a, b) => a.t - b.t)) {
+    if (c && n.t - c.t <= 0.06) c.notes.push(n); else out.push((c = { t: n.t, notes: [n] }));
+  }
+  out.forEach((c) => c.notes.sort((a, b) => a.m - b.m));
+  return out;
+}
+// 找出最常见的脉动间隔 p（秒）
+function findPulse(iois) {
+  let best = 0.5, bs = -1;
+  for (let p = 0.25; p <= 1.0001; p += 0.005) {
+    let s = 0;
+    for (const x of iois) { let m = 0; for (const [k, w] of KS) { const e = x / (k * p) - 1, g = w * Math.exp(-(e / 0.08) * (e / 0.08)); if (g > m) m = g; } s += m; }
+    const lg = Math.log2(p / 0.55); s *= Math.exp(-lg * lg / 1.6);   // 同样合适时，取接近每分钟 110 拍的那个
+    if (s > bs + 1e-9) { bs = s; best = p; }
+  }
+  return best;
+}
+function analyze(notes, pedal) {
+  const A = { adv: [], good: [], facts: [], marks: [], tempo: [] };
+  const dur = Math.max(...notes.map((n) => n.t + n.d));
+  const cl = clusters(notes);
+  A.dur = dur; A.notes = notes;
+  A.facts.push(['时长', mmss(dur) + '（' + notes.length + ' 个音）']);
+  const ms = notes.map((n) => n.m);
+  A.facts.push(['音域', nn(Math.min(...ms)) + ' – ' + nn(Math.max(...ms))]);
+
+  /* 节奏 */
+  const iois = []; for (let i = 1; i < cl.length; i++) iois.push(cl[i].t - cl[i - 1].t);
+  const usable = iois.filter((x) => x > 0.08 && x < 2.5);
+  if (usable.length >= 12) {
+    const p0 = findPulse(usable); let cur = p0;
+    const devs = [], hes = [], rush = [], breaks = [];
+    for (let i = 1; i < cl.length; i++) {
+      const x = cl[i].t - cl[i - 1].t;
+      if (x < 0.08) continue;
+      if (x > Math.max(2, 4.2 * cur)) { breaks.push({ t: cl[i - 1].t, len: x }); continue; }
+      let bk = 1, be = 9;
+      for (const [k] of KS) { const e = Math.abs(Math.log(x / (k * cur))); if (e < be) { be = e; bk = k; } }
+      const e = x / (bk * cur) - 1;
+      const off = Math.abs(x - bk * cur) >= 0.045;   // 差不到 0.045 秒的听不出来，不算
+      if (e >= 0.12 && off) hes.push({ t: cl[i].t, extra: x - bk * cur, e });
+      else if (e <= -0.12 && off) rush.push({ t: cl[i].t, e });
+      else { devs.push(e); cur = cur * (1 - 0.15 * Math.min(1, bk)) + (x / bk) * 0.15 * Math.min(1, bk); }
+      A.tempo.push({ t: cl[i].t, bpm: 60 / cur });
+    }
+    const bpm = median(A.tempo.map((x) => x.bpm));
+    const rms = Math.sqrt(mean(devs.map((e) => e * e))) * 100;
+    const q = Math.max(1, Math.floor(A.tempo.length / 4));
+    const b1 = median(A.tempo.slice(0, q).map((x) => x.bpm)), b2 = median(A.tempo.slice(-q).map((x) => x.bpm));
+    const drift = (b2 / b1 - 1) * 100, mins = dur / 60;
+    A.facts.push(['速度', '大约每分钟 ' + Math.round(bpm) + ' 拍（按最常见的音符间隔估的，可能是实际拍子的一半或两倍）']);
+    A.facts.push(['速度变化', '开头约 ' + Math.round(b1) + '，结尾约 ' + Math.round(b2) + '（' + (drift >= 0 ? '+' : '') + drift.toFixed(0) + '%）']);
+    A.facts.push(['节奏均匀度', '平均偏差 ' + rms.toFixed(1) + '%（3% 以内很稳，5% 以上能听出不匀）']);
+    A.facts.push(['卡顿 / 抢拍', hes.length + ' 处 / ' + rush.length + ' 处' + (breaks.length ? '，另有 ' + breaks.length + ' 处长停顿（超过 2 秒）' : '')]);
+    hes.sort((a, b) => b.extra - a.extra);
+    hes.forEach((h) => A.marks.push({ t: h.t, c: 'bad' })); rush.forEach((h) => A.marks.push({ t: h.t, c: 'warn' }));
+    const hesRate = hes.length / Math.max(0.25, mins);
+    if (hes.length >= 3 && hesRate >= 2) {
+      const top = hes.slice(0, 6).sort((a, b) => a.t - b.t).map((h) => mmss(h.t) + '（多等了 ' + h.extra.toFixed(2) + ' 秒）').join('、');
+      A.adv.push({ sev: 60 + Math.min(40, hesRate * 3), t: '有 ' + hes.length + ' 处卡顿：下一个音来晚了', d: '最明显的几处在 ' + top + '。卡顿通常说明那里的音或指法还没想清楚，手在等脑子。',
+        how: '练法：对照下面的图找到这几处，每处只取前后各两拍，用现在一半的速度连续弹对 5 遍再放回去。整段练的时候把速度降到这几处也不用停的程度。' });
+    } else if (hes.length <= 1 && devs.length >= 20) A.good.push('几乎没有卡顿（' + hes.length + ' 处），说明这段已经弹熟了。');
+    if (rush.length >= 3 && rush.length / Math.max(0.25, mins) >= 2) {
+      const top = rush.slice().sort((a, b) => a.e - b.e).slice(0, 6).sort((a, b) => a.t - b.t).map((h) => mmss(h.t)).join('、');
+      A.adv.push({ sev: 45 + Math.min(30, rush.length / mins * 2), t: '有 ' + rush.length + ' 处抢拍：音来得太早', d: '比较明显的在 ' + top + '。抢拍多半出在长音或休止之后——没数满就走了。',
+        how: '练法：长音和休止在心里把拍子数完（或开节拍器），数满了再弹下一个音。' });
+    }
+    if (rms > 5) A.adv.push({ sev: 40 + Math.min(40, (rms - 5) * 6), t: '节奏不够匀：音与音之间的间隔平均偏差 ' + rms.toFixed(1) + '%', d: '除去卡顿以外，普通的音之间也时长时短，听起来会"一颠一颠"。',
+      how: '练法：开节拍器，从比现在慢 20% 的速度开始，每个音对准拍点；连续两遍都稳了再加 5%。' });
+    else if (rms < 3.2 && devs.length >= 20) A.good.push('节奏很稳：音与音的间隔平均只偏差 ' + rms.toFixed(1) + '%。');
+    if (Math.abs(drift) >= 7 && A.tempo.length >= 24) A.adv.push({ sev: 35 + Math.min(35, Math.abs(drift) * 1.5), t: drift > 0 ? '越弹越快：结尾比开头快了 ' + drift.toFixed(0) + '%' : '越弹越慢：结尾比开头慢了 ' + (-drift).toFixed(0) + '%',
+      d: '开头约每分钟 ' + Math.round(b1) + ' 拍，结尾约 ' + Math.round(b2) + ' 拍。' + (drift > 0 ? '越弹越快通常是手熟了就不自觉往前赶。' : '越弹越慢通常是后面没有前面熟，或者手累了。'),
+      how: drift > 0 ? '练法：开节拍器弹完整段；或者开头就定一个"最难那句也弹得下来"的速度，全程守住。' : '练法：把后半段单独拿出来多练几遍，练到和前半段一样熟再连起来。' });
+    else if (Math.abs(drift) < 4 && A.tempo.length >= 24) A.good.push('速度守得住：开头和结尾只差 ' + Math.abs(drift).toFixed(0) + '%。');
+    if (breaks.length) A.facts.push(['长停顿位置', breaks.map((b) => mmss(b.t) + '（' + b.len.toFixed(1) + ' 秒）').join('、')]);
+  } else A.facts.push(['节奏', '音太少，没法判断节奏（至少要十几个音）']);
+
+  /* 和弦 / 双手是否对齐 */
+  const multi = cl.filter((c) => c.notes.length >= 2);
+  if (multi.length >= 8) {
+    const sp = multi.map((c) => (Math.max(...c.notes.map((n) => n.t)) - c.t) * 1000), med = median(sp), wide = sp.filter((x) => x > 35).length / sp.length;
+    A.facts.push(['同时按下的音', multi.length + ' 组，先后相差中位数 ' + med.toFixed(0) + ' 毫秒（20 以内算整齐）']);
+    if (med > 25 || wide > 0.35) A.adv.push({ sev: 35 + Math.min(40, med), t: '该同时按的音没有按齐：先后相差中位数 ' + med.toFixed(0) + ' 毫秒', d: Math.round(wide * 100) + '% 的和弦（或两只手一起的音）前后差了 35 毫秒以上，听起来是"散"的。',
+      how: '练法：把和弦当成一个动作——手指先在键面上摆好形状，再用手腕一起落下去；双手一起的地方放慢，盯着两只手同时到底。' });
+    else if (med < 15) A.good.push('和弦按得整齐：同时的音先后只差 ' + med.toFixed(0) + ' 毫秒。');
+  }
+
+  /* 力度 */
+  const vs = notes.map((n) => n.v), vm = mean(vs), vsd = std(vs);
+  A.facts.push(['力度', '平均 ' + vm.toFixed(0) + '，最轻 ' + Math.min(...vs) + '，最重 ' + Math.max(...vs) + '（满分 127）']);
+  const flatVel = Math.max(...vs) === Math.min(...vs);
+  if (flatVel && notes.length >= 20) A.facts.push(['力度说明', '所有音力度都一样：这台键盘没有力度感应（或关掉了），力度方面无法分析']);
+  else if (notes.length >= 30) {
+    if (vsd < 9) A.adv.push({ sev: 42, t: '力度太平：几乎没有强弱变化', d: '所有音的力度都挤在 ' + vm.toFixed(0) + ' 上下（波动只有 ' + vsd.toFixed(0) + '），听起来像在念字而不是唱歌。',
+      how: '练法：先决定每一句的最高点在哪，往那里渐强、过了之后渐弱；练的时候故意夸张一倍。' });
+    else if (vsd > 14) A.good.push('有强弱变化（力度波动 ' + vsd.toFixed(0) + '）。');
+    if (vm > 98) A.adv.push({ sev: 30, t: '整体偏重：平均力度 ' + vm.toFixed(0), d: '一直用很大的力，手容易僵、容易累，也没有再强的余地。', how: '练法：整段用"一半的力气"弹一遍，留意肩膀和手腕是不是松的。' });
+    // 旋律（最高音）有没有比伴奏突出
+    const bal = multi.filter((c) => c.notes[c.notes.length - 1].m - c.notes[c.notes.length - 2].m >= 5).map((c) => c.notes[c.notes.length - 1].v - mean(c.notes.slice(0, -1).map((n) => n.v)));
+    if (bal.length >= 10) {
+      const bm = mean(bal);
+      A.facts.push(['旋律和伴奏', '最高音比同时的其他音平均' + (bm >= 0 ? '重 ' : '轻 ') + Math.abs(bm).toFixed(0)]);
+      if (bm < 4) A.adv.push({ sev: 38 + Math.min(25, (4 - bm) * 2), t: '旋律不突出：最高音' + (bm >= 0 ? '只比下面的音重 ' + bm.toFixed(0) : '反而比下面的音轻 ' + (-bm).toFixed(0)), d: '最高的那个音通常是旋律，应该明显比伴奏响，不然旋律会被盖住。',
+        how: '练法：伴奏的手贴着键轻轻弹，旋律的手指"多沉下去一点"；可以先让伴奏只碰键不出声，只把旋律弹响。' });
+      else if (bm >= 10) A.good.push('旋律比伴奏突出（最高音平均重 ' + bm.toFixed(0) + '）。');
+    }
+    // 连续跑动的音力度是否均匀
+    const ue = [];
+    for (let i = 1; i + 1 < cl.length; i++) {
+      const a = cl[i - 1], b = cl[i], c = cl[i + 1];
+      if (a.notes.length !== 1 || b.notes.length !== 1 || c.notes.length !== 1) continue;
+      if (b.t - a.t > 0.4 || c.t - b.t > 0.4 || Math.abs(b.notes[0].m - a.notes[0].m) > 4 || Math.abs(c.notes[0].m - b.notes[0].m) > 4) continue;
+      ue.push(Math.abs(b.notes[0].v - (a.notes[0].v + c.notes[0].v) / 2));
+    }
+    if (ue.length >= 12) {
+      const um = mean(ue);
+      A.facts.push(['快速连续的音', ue.length + ' 个，相邻力度平均相差 ' + um.toFixed(0)]);
+      if (um > 12) A.adv.push({ sev: 30 + Math.min(30, (um - 12) * 2), t: '跑动的音轻重不匀：相邻的音力度平均差 ' + um.toFixed(0), d: '连续的快音里有的突然冒出来、有的发虚，通常是拇指太重或 4、5 指太弱。',
+        how: '练法：这些段落慢速、每个音都用同样的力弹；再用附点节奏（长短、短长）各练几遍，把弱的手指练出来。' });
+      else if (um < 7) A.good.push('跑动的音颗粒均匀（相邻力度平均只差 ' + um.toFixed(0) + '）。');
+    }
+  }
+
+  /* 连断 */
+  const lg = [];
+  for (let i = 1; i < cl.length; i++) {
+    const a = cl[i - 1], b = cl[i]; if (a.notes.length !== 1 || b.notes.length !== 1) continue;
+    const x = b.t - a.t; if (x > 1 || x < 0.08 || Math.abs(a.notes[0].m - b.notes[0].m) > 5 || a.notes[0].m === b.notes[0].m) continue;
+    lg.push(a.notes[0].d / x);
+  }
+  const pedDown = []; { let on = null; for (const p of pedal) { if (p.on && on == null) on = p.t; else if (!p.on && on != null) { pedDown.push([on, p.t]); on = null; } } if (on != null) pedDown.push([on, dur]); }
+  const pedPct = pedDown.reduce((s, x) => s + x[1] - x[0], 0) / Math.max(1, dur) * 100;
+  if (lg.length >= 12) {
+    const lm = median(lg);
+    A.facts.push(['连贯程度', '相邻的音，前一个按住了间隔的 ' + Math.round(lm * 100) + '%（90–105% 是连奏）']);
+    if (lm < 0.6 && pedPct < 30) A.adv.push({ sev: 28 + Math.min(25, (0.6 - lm) * 60), t: '音与音之间是断开的：前一个音只按住了 ' + Math.round(lm * 100) + '%', d: '如果这段本来就是断奏（跳音）可以忽略；如果是旋律，听起来会不连贯。',
+      how: '练法：连奏时前一个手指等下一个音按下去了再抬——像走路，一只脚落地另一只才离地。' });
+    else if (lm > 1.2 && pedPct < 30) A.adv.push({ sev: 26, t: '手指抬得太晚：前一个音和后一个音重叠了 ' + Math.round((lm - 1) * 100) + '%', d: '相邻的音叠在一起响，声音会糊。', how: '练法：慢速弹，注意每个手指弹完就放松抬起，不要压在键上。' });
+    else if (lm >= 0.85 && lm <= 1.1) A.good.push('连奏接得干净（前一个音按住了间隔的 ' + Math.round(lm * 100) + '%）。');
+  }
+
+  /* 踏板 */
+  if (pedDown.length) {
+    const hold = median(pedDown.map((x) => x[1] - x[0]));
+    A.facts.push(['踏板', '踩了 ' + pedDown.length + ' 次，' + Math.round(pedPct) + '% 的时间踩着，每次中位数 ' + hold.toFixed(1) + ' 秒']);
+    const long = pedDown.filter((x) => x[1] - x[0] > 6);
+    if (long.length && (pedPct > 80 || long.length >= pedDown.length / 2)) A.adv.push({ sev: 36, t: '踏板换得太少：有 ' + long.length + ' 次一口气踩了 6 秒以上', d: '最长的在 ' + long.slice().sort((a, b) => (b[1] - b[0]) - (a[1] - a[0])).slice(0, 4).sort((a, b) => a[0] - b[0]).map((x) => mmss(x[0]) + '（' + (x[1] - x[0]).toFixed(0) + ' 秒）').join('、') + '。踏板不换，前后和声混在一起会浑。',
+      how: '练法：每换一个和弦换一次踏板——手按下新和弦的同时脚抬起，紧接着再踩下去。' });
+  } else A.facts.push(['踏板', '没有收到踏板信号（没踩，或踏板没接到键盘上）']);
+
+  /* 蹭到的音 */
+  const slips = [];
+  for (const n of notes) {
+    if (n.d >= 0.07) continue;
+    if (notes.some((o) => o !== n && Math.abs(o.m - n.m) <= 2 && o.m !== n.m && Math.abs(o.t - n.t) < 0.12 && o.d > n.d * 2 && o.v >= n.v)) slips.push(n);
+  }
+  slips.forEach((n) => A.marks.push({ t: n.t, c: 'slip' }));
+  A.facts.push(['蹭到的音', slips.length ? slips.length + ' 个：' + slips.slice(0, 10).map((n) => mmss(n.t) + ' ' + nn(n.m)).join('、') + (slips.length > 10 ? ' …' : '') : '没发现']);
+  if (slips.length >= 3 && slips.length / Math.max(0.25, dur / 60) >= 1.5) A.adv.push({ sev: 30 + Math.min(30, slips.length * 2), t: '蹭到了 ' + slips.length + ' 个旁边的键', d: '这些音又短又轻、紧挨着另一个正常的音，是手指带到了隔壁的键：' + slips.slice(0, 6).map((n) => mmss(n.t) + ' ' + nn(n.m)).join('、') + '。',
+    how: '练法：这通常出在大跳或和弦换位的时候。把那一下跳单独练：眼睛先看到目标键，手移过去停在键面上，再按。' });
+
+  A.adv.sort((a, b) => b.sev - a.sev);
+  return A;
+}
+
+/* ---------- 显示 ---------- */
+function esc(s) { return String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+function show(A) {
+  $('out').hidden = false;
+  $('adv').innerHTML = A.adv.length ? A.adv.slice(0, 5).map((x) => '<li><div class="t">' + esc(x.t) + '</div><div>' + esc(x.d) + '</div><div class="how">' + esc(x.how) + '</div></li>').join('')
+    : '<li><div class="t">这次没有找到明显的问题</div><div>节奏、力度、整齐度都在正常范围内。可以把速度提一点，或者换更难的段落再录。</div></li>';
+  $('goodBox').hidden = !A.good.length;
+  $('good').innerHTML = A.good.map((x) => '<li>' + esc(x) + '</li>').join('');
+  $('facts').innerHTML = A.facts.map((f) => '<tr><td>' + esc(f[0]) + '</td><td>' + esc(f[1]) + '</td></tr>').join('');
+  drawRoll(A);
+}
+function drawRoll(A) {
+  const cv = $('roll'), box = $('rollBox'), cs = getComputedStyle(document.documentElement), col = (v) => cs.getPropertyValue(v).trim();
+  const pps = Math.max(24, Math.min(90, (box.clientWidth - 2) / Math.max(1, A.dur))), Wc = Math.min(16000, Math.max(box.clientWidth - 2, Math.ceil(A.dur * pps) + 20));
+  const sx = (Wc - 20) / Math.max(1, A.dur), top = 46, H = 230, dpr = Math.min(2, window.devicePixelRatio || 1);
+  cv.style.width = Wc + 'px'; cv.style.height = H + 'px'; cv.width = Wc * dpr; cv.height = H * dpr;
+  const g = cv.getContext('2d'); g.scale(dpr, dpr); g.clearRect(0, 0, Wc, H);
+  const lo = Math.min(...A.notes.map((n) => n.m)) - 1, hi = Math.max(...A.notes.map((n) => n.m)) + 1, rh = Math.max(2, Math.min(8, (H - top - 6) / (hi - lo + 1)));
+  const y = (m) => top + (hi - m) * ((H - top - 6) / (hi - lo + 1));
+  g.font = '11px sans-serif'; g.fillStyle = col('--muted'); g.strokeStyle = col('--line'); g.lineWidth = 1;
+  const stepS = A.dur > 240 ? 30 : A.dur > 60 ? 10 : 5;
+  for (let t = 0; t <= A.dur; t += stepS) { const x = 10 + t * sx; g.beginPath(); g.moveTo(x + .5, top - 4); g.lineTo(x + .5, H); g.stroke(); g.fillText(mmss(t), x + 3, H - 3); }
+  const mc = { bad: col('--bad'), warn: col('--warn'), slip: '#8e5bd0' };
+  for (const m of A.marks) { g.fillStyle = mc[m.c]; g.globalAlpha = .28; g.fillRect(10 + m.t * sx - 3, top - 4, 6, H - top + 4); g.globalAlpha = 1; g.fillRect(10 + m.t * sx - 3, top - 8, 6, 4); }
+  g.fillStyle = col('--note');
+  for (const n of A.notes) { g.globalAlpha = 0.3 + 0.7 * Math.min(1, n.v / 110); g.fillRect(10 + n.t * sx, y(n.m), Math.max(2, n.d * sx - 1), rh); }
+  g.globalAlpha = 1;
+  if (A.tempo.length > 3) {
+    const bs = A.tempo.map((x) => x.bpm), mn = Math.min(...bs) * 0.95, mx = Math.max(...bs) * 1.05;
+    g.strokeStyle = col('--accent'); g.lineWidth = 1.5; g.beginPath();
+    A.tempo.forEach((p, i) => { const X = 10 + p.t * sx, Y = 34 - (p.bpm - mn) / Math.max(1, mx - mn) * 28; i ? g.lineTo(X, Y) : g.moveTo(X, Y); });
+    g.stroke(); g.fillStyle = col('--accent'); g.fillText('速度 ' + Math.round(Math.min(...bs)) + '–' + Math.round(Math.max(...bs)), 12, 12);
+  }
+}
+function runAnalysis() {
+  if (R.rec) stopRec();
+  if (!R.notes.length) return;
+  if (R.notes.length < 8) { $('out').hidden = true; $('live').textContent = '只录到 ' + R.notes.length + ' 个音，太少了。至少弹十几秒再分析。'; return; }
+  show(analyze(R.notes, R.pedal));
+  $('out').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+$('bRec').onclick = () => (R.rec ? stopRec() : startRec());
+$('bAna').onclick = runAnalysis;
+window.addEventListener('resize', () => { if (!$('out').hidden && R.notes.length >= 8) drawRoll(analyze(R.notes, R.pedal)); });
+// 上一次的录音还在：刷新页面后可以直接再分析
+try { const s = JSON.parse(localStorage.getItem('sr.rec') || 'null'); if (s && s.notes && s.notes.length) { R.notes = s.notes; R.pedal = s.pedal || []; $('bAna').disabled = false; $('live').textContent = '上一次录的 ' + R.notes.length + ' 个音还在，可以直接按 StartAnalysis。'; } } catch (e) { }
+window.__feed = (notes, pedal) => { R.notes = notes; R.pedal = pedal || []; $('bAna').disabled = false; };
+initMidi();
+</script>
+</body>
+</html>
