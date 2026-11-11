@@ -1129,14 +1129,31 @@ async function deflateRawBytes(u8) {
   if (typeof CompressionStream === 'undefined') return null;
   try { return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer()); } catch (e) { return null; }
 }
-function isSongLink(h) { return /^#?(pop|z|s)=/.test(h || ''); }
+function isSongLink(h) { return /^#?(pop|z|s|e)=/.test(h || ''); }
+// 加密存放的曲谱：仓库里只有密文（scores/编号.bin），密钥只在链接的 # 后面（不会发给服务器）
+async function fetchEncryptedScore(id, k) {
+  if (!/^[0-9a-f]{8,32}$/.test(id)) throw new Error('链接不完整');
+  if (!(window.crypto && crypto.subtle)) throw new Error('这个浏览器不支持解密');
+  const r = await fetch(new URL(`scores/${id}.bin`, location.href));
+  if (!r.ok) throw new Error('找不到曲谱（HTTP ' + r.status + '）');
+  const buf = new Uint8Array(await r.arrayBuffer());
+  const key = await crypto.subtle.importKey('raw', b64urlToBytes(k), 'AES-GCM', false, ['decrypt']);
+  let pt;
+  try { pt = new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.subarray(0, 12) }, key, buf.subarray(12))); }
+  catch (e) { throw new Error('密钥不对，链接可能复制不完整'); }
+  return inflateRaw(pt);
+}
 async function learnFromLink(h) {
   const q = new URLSearchParams((h || '').replace(/^#/, ''));
   $('loading').classList.add('show');
   try {
     let r;
     if (q.has('pop')) r = await pop909Load(+q.get('pop'));
-    else {
+    else if (q.has('e')) {
+      r = await learnLoadBytes(await fetchEncryptedScore(q.get('e'), q.get('k') || ''), 'score');
+      const list = pieceList(); const ent = list.find((p) => p.id === r.id);
+      if (ent) { ent.link = `#e=${q.get('e')}&k=${q.get('k')}`; lsSet('sr.pieces', list); }
+    } else {
       const raw = q.has('z') ? await inflateRaw(b64urlToBytes(q.get('z'))) : b64urlToBytes(q.get('s'));
       r = await learnLoadBytes(raw, q.get('n') || 'score', q.get('n') || '');
     }
@@ -1151,6 +1168,7 @@ async function learnMakeLink() {
   const base = location.origin + location.pathname;
   const ent = pieceList().find((p) => p.id === LM.id);
   if (ent && ent.pop) return { url: `${base}#pop=${ent.pop}`, private: false };
+  if (ent && ent.link) return { url: base + ent.link, private: true, short: true };
   const rec = await IDB.get('piece:' + LM.id); if (!rec) return null;
   const u8 = rec.kind === 'xml' ? new TextEncoder().encode(rec.data) : rec.data;
   const z = await deflateRawBytes(u8);
@@ -1261,7 +1279,7 @@ function learnInitUI() {
     const box = $('lLinkBox'); box.hidden = false; box.value = r.url; box.select();
     let copied = false; try { await navigator.clipboard.writeText(r.url); copied = true; } catch (e) { }
     $('lLinkNote').hidden = false;
-    $('lLinkNote').textContent = (copied ? '链接已复制。' : '请长按上面的链接全选复制。') + (r.private ? '这条链接里含有整份谱子（没有上传到任何地方），只发给自己，不要转发。' : '这是曲库里的歌，链接里只有编号。') + '在 iPhone 上用 MIDIWeb Browser 打开这条链接，就会直接进入这首曲子。';
+    $('lLinkNote').textContent = (copied ? '链接已复制。' : '请长按上面的链接全选复制。') + (!r.private ? '这是曲库里的歌，链接里只有编号。' : r.short ? '链接里有解密密钥，只发给自己，不要转发。' : '这条链接里含有整份谱子（没有上传到任何地方），所以比较长，只发给自己。想要短链接，把曲谱文件交给 Claude 加密上传。') + '在 iPhone 上用 MIDIWeb Browser 打开这条链接，就会直接进入这首曲子。';
   };
   const rangeChanged = () => {
     const D = LM.data, n = LM.bars.length;
