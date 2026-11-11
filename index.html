@@ -201,7 +201,7 @@ body.nomidi .midi{display:none!important}
       <button id="bMidi" class="midi">🎹 连接 MIDI 键盘</button>
       <label class="midi"><input type="checkbox" id="cFollow" disabled> 等待模式（弹对才前进）</label>
       <label class="midi"><input type="checkbox" id="cMidiSound"> MIDI 输入发声</label>
-      <label>声音 <select id="selSound"><option value="all">全部播放（听+看）</option><option value="others">只播我不弹的手</option><option value="none">静音（只跟光标）</option></select></label>
+      <label>声音 <select id="selSound"><option value="all">全部播放（听+看）</option><option value="others">只播我不弹的手</option><option value="mine">只播我弹的手（示范）</option><option value="none">静音（只跟光标）</option></select></label>
       <label>我弹 <select id="selHand"><option value="both">双手</option><option value="rh">右手</option><option value="lh">左手</option></select></label>
       <label><input type="checkbox" id="cLoop"> 循环本曲 (L)</label>
       <label><input type="checkbox" id="cCont" checked> 自动接下一首</label>
@@ -216,7 +216,7 @@ body.nomidi .midi{display:none!important}
   </div>
   <div id="learnPanel" hidden>
     <div class="row">
-      <div id="lIntro" class="lnote"><b>学曲子</b>：载入你自己的曲谱文件（MusicXML、.mxl 或 MIDI），App 自动排好学习计划（分段、分手、逐步提速），你按顺序一步步过关。连上 MIDI 键盘会自动判断每遍弹得对不对，并标出最容易错的小节。曲谱只保存在这台设备上。</div>
+      <div id="lIntro" class="lnote"><b>学曲子</b>：载入你自己的曲谱文件（MusicXML、.mxl 或 MIDI），App 自动排好学习计划（分段、分手、逐步提速），并在谱上用蓝色数字提示指法，你按顺序一步步过关。连上 MIDI 键盘会自动判断每遍弹得对不对，并标出最容易错的小节。曲谱只保存在这台设备上。</div>
       <label class="lbtn">📂 载入曲谱文件<input type="file" id="lFile" hidden></label>
       <label>我的曲子 <select id="lPiece"></select></label>
       <button id="lOpen">打开</button>
@@ -236,6 +236,7 @@ body.nomidi .midi{display:none!important}
       <label class="lneed lmanual">过关：连续弹对 <select id="lNeed"><option>2</option><option>3</option><option>5</option></select> 遍</label>
       <label class="lneed"><input type="checkbox" id="lLoop" checked> 循环播放</label>
       <label class="lneed"><input type="checkbox" id="lHeat" checked> 标出易错小节</label>
+      <label class="lneed"><input type="checkbox" id="lFinger" checked> 指法提示</label>
       <button id="lOk" class="lneed">✓ 这遍弹对了</button>
       <button id="lPlanPrev" class="lneed lplanonly">◀ 上一步</button>
       <button id="lPlanSkip" class="lneed lplanonly">跳过这步 ▶</button>
@@ -271,7 +272,7 @@ body.nomidi .midi{display:none!important}
   <h3>常用设置</h3>
   <ul>
     <li><b>速度</b>：按每首推荐速度的百分比调整。<kbd>↑</kbd><kbd>↓</kbd> 每次 ±5%。</li>
-    <li><b>声音</b>：“全部播放”=先听一遍再弹；“只播我不弹的手”=分手练习时让电脑弹另一只手；“静音”=完全自己弹，只跟光标。</li>
+    <li><b>声音</b>：“全部播放”=先听一遍再弹；“只播我不弹的手”=分手练习时让电脑弹另一只手；“只播我弹的手”=电脑给你练的这只手做示范；“静音”=完全自己弹，只跟光标。</li>
     <li><b>循环本曲</b>：同一首反复练（第二遍以后就不算视奏了，适合难点）。</li>
     <li><b>点击谱面任意小节</b>即可从那里开始。</li>
   </ul>
@@ -292,7 +293,8 @@ body.nomidi .midi{display:none!important}
   <h3>学曲子（📖 按钮）</h3>
   <ul>
     <li><b>载入曲谱</b>：点“📖 学曲子 → 📂 载入曲谱文件”，选 MusicXML（.musicxml / .xml / .mxl）或 MIDI（.mid）文件。MuseScore 等打谱软件都能导出 MusicXML。曲谱只存在这台设备上。</li>
-    <li><b>学习计划（默认，推荐）</b>：App 把曲子切成每段 4 小节（约一句），按顺序安排好每一步，你只管按 ▶ 弹。每段：没学过的手先单手练（等待模式 → 70% → 原速），另一只手由 App 弹、谱上画成浅色；再双手（等待模式 → 60% → 80% → 原速）；和前面学过的小节一样的手不再单独练。从第二段起每段和上一段连起来；每 4 段连成一大段；最后整首。每步连续弹对 2 遍（原速 3 遍）自动进入下一步。等待模式需要 MIDI 键盘：你弹对了光标才往前走；没连 MIDI 时这一步改成 50% 慢速。手动调慢速度或换手，那一遍不计。练法里还可以选“上一步”“跳过这步”“从第 1 步重来”。</li>
+    <li><b>学习计划（默认，推荐）</b>：App 把曲子切成每段 4 小节（约一句），按顺序安排好每一步，你只管按 ▶ 弹。每段：没学过的手先单手练（先听一遍示范 → 等待模式自己认音 → 70% 跟着示范弹 → 原速自己弹、只有节拍器），另一只手不出声、谱上画成浅色；再双手（等待模式 → 60% → 80% → 原速）；和前面学过的小节一样的手不再单独练。从第二段起每段和上一段连起来；每 4 段连成一大段；最后整首。每步连续弹对 2 遍（原速 3 遍）自动进入下一步。等待模式需要 MIDI 键盘：你弹对了光标才往前走；没连 MIDI 时这一步改成 50% 慢速。手动调慢速度或换手，那一遍不计。练法里还可以选“上一步”“跳过这步”“从第 1 步重来”。</li>
+    <li><b>指法提示</b>：谱上的蓝色数字是手指（1 拇指 … 5 小指），右手写在上方、左手写在下方。只在需要的地方标：每段的第一个音，以及手要离开原位的地方（穿指、扩指、挪手）；没标的音按相邻手指顺着弹。原谱（MusicXML）自带指法时用原谱的，其余是 App 自动算的——能弹、但不一定是最顺手的，可以按自己的手改。不想看可以在面板里关掉“指法提示”。</li>
     <li><b>选范围</b>（自由循环、速度阶梯、从后往前时）：输入起止小节，或点“👆 在谱上点选范围”后在谱上点两下。范围会循环播放，每遍之间有一小节预备拍。</li>
     <li><b>速度阶梯</b>：从较慢的速度开始（例如 60%），连续弹对几遍（默认 3 遍）就自动加快 5%，一直到原速。</li>
     <li><b>从后往前</b>：先练范围的最后一两小节，过关后自动往前加一段，越往后越熟，每次都完整弹到结尾。</li>
@@ -1436,6 +1438,10 @@ function lineGeom(ex, ln) {
     const has = (h) => ln.some((i) => ex.bars[i][h].some((e) => e.tupN));
     if (has('rh')) above += 26;
     if (has('lh')) below += 28;
+    // 指法数字：右手写在上方、左手写在下方（和弦的几个数字竖着叠）
+    const fgN = (h) => Math.max(0, ...ln.map((i) => Math.max(0, ...ex.bars[i][h].map((e) => (e.fgShow ? e.fgShow.filter(Boolean).length : 0)))));
+    if (fgN('rh')) above += 4 + 11 * fgN('rh');
+    if (fgN('lh')) below += 4 + 11 * fgN('lh');
   }
   const gap = Math.min(150, 44 + Math.max(0, 30 - rhMin) * 5 + Math.max(0, lhMax - 26) * 5 + (dyn ? 16 : 0));
   const trebleY = above - 40, bassY = trebleY + 40 + gap;
@@ -1514,6 +1520,7 @@ function renderExercise(ex, div, cw, pageH, nLines, li) {
         V.voices.forEach((v) => v.draw(ctx, st));
         V.beams.forEach((b) => b.setContext(ctx).draw());
         V.tuplets.forEach((t) => t.setContext(ctx).draw());
+        if (ex.learn) drawFingerings(ctx, bar[h], h, st, V.tuplets);
         ctx.closeGroup();
       }
       // 光标锚点：每个起音位置的 x
@@ -1538,6 +1545,29 @@ function renderExercise(ex, div, cw, pageH, nLines, li) {
   });
   ex.zoom = zoom;
   if (ex.learn) learnAfterRender(ex);
+}
+// 指法数字（学曲子模式）：右手在音符上方、左手在下方，躲开符干、符杠和连音数字
+function drawFingerings(ctx, evs, h, stave, tuplets) {
+  const up = h === 'rh';
+  // 连音数字（和括号）的位置：指法要写到它的外面
+  const tupY = new Map();
+  for (const tp of tuplets || []) { try { const y = tp.getYPosition(); for (const n of (tp.getNotes ? tp.getNotes() : tp.notes)) tupY.set(n, y); } catch (er) { } }
+  for (const e of evs) {
+    if (!e.fgShow || !e.sn) continue;
+    const fs = []; e.fgShow.forEach((f) => { if (f) fs.push(f); });
+    if (!fs.length) continue;
+    let cx, y0, y1;
+    try {
+      cx = (e.sn.getNoteHeadBeginX() + e.sn.getNoteHeadEndX()) / 2;
+      const ys = e.sn.getYs(); y0 = Math.min(...ys) - 5; y1 = Math.max(...ys) + 5;
+      if (e.sn.hasStem()) { const se = e.sn.getStemExtents(); y0 = Math.min(y0, se.topY, se.baseY); y1 = Math.max(y1, se.topY, se.baseY); }
+    } catch (er) { continue; }
+    if (tupY.has(e.sn)) { const ty = tupY.get(e.sn); if (up) y0 = Math.min(y0, ty - 9); else y1 = Math.max(y1, ty + 9); }
+    ctx.save(); ctx.setFont('Arial', 12, 'bold'); ctx.setFillStyle('#1d5fd6');   // 蓝色：和连音的 3 区分开
+    if (up) { let y = Math.min(y0, stave.getYForLine(0)) - 4; for (const f of fs) { ctx.fillText(String(f), cx - 3, y); y -= 11; } }
+    else { let y = Math.max(y1, stave.getYForLine(4)) + 12; for (const f of fs.reverse()) { ctx.fillText(String(f), cx - 3, y); y += 11; } }
+    ctx.restore();
+  }
 }
 // 连音线：同一行内画完整的；跨行、跨页的两头各画半条
 function drawTies(ex, ln, ctx) {
@@ -1661,7 +1691,7 @@ function posT0(now) {
   return a.t0 + (now - a.ctx) * a.f;
 }
 function lowerBound(arr, t0) { let lo = 0, hi = arr.length; while (lo < hi) { const m = (lo + hi) >> 1; if (arr[m].t0 < t0) lo = m + 1; else hi = m; } return lo; }
-function handPlays(h) { const s = S.settings.sound; if (s === 'none') return false; if (s === 'all') return true; return !(S.settings.hand === 'both' || S.settings.hand === h); }
+function handPlays(h) { const s = S.settings.sound; if (s === 'none') return false; if (s === 'all') return true; const mine = S.settings.hand === 'both' || S.settings.hand === h; return s === 'mine' ? mine : !mine; }
 function practiceHand(h) { return S.settings.hand === 'both' || S.settings.hand === h; }
 
 async function startPlay() {
@@ -1922,6 +1952,7 @@ function onNoteOn(m, vel) {
   if (!P.playing && !onNoteOn.hinted) { onNoteOn.hinted = true; toast('已收到琴键：按 ▶ 播放后跟着弹，弹对变绿、漏掉变红；想让光标等你，在设置里打开“等待模式”'); }
   if (S.settings.midiSound && AU.ctx) AU.note(m, AU.ctx.currentTime, 0.6, 0.4 + vel / 200);
   if (!P.playing) return;
+  if (LM.active && planListening()) return;   // “先听一遍”这一步不评分
   if (P.mode === 'follow') return followNote(m);
   const sc = SC[scKey()]; if (!sc) return;
   const t = posT0(AU.ctx.currentTime);
@@ -2025,7 +2056,7 @@ function playOthers(o) {
   const now = AU.ctx.currentTime;
   const ex = S.exs[o.ex];
   for (const e of o.evs) {
-    if (practiceHand(e.hand) || !handPlays(e.hand)) continue;
+    if (practiceHand(e.hand) || !handPlays(e.hand)) continue;   // 等待模式：自己弹的手不由 App 出声
     const dur = e.dur * spt(ex) / factor();
     e.notes.forEach((n) => { if (!n.tieStop) AU.note(n.midi, now, (n.tieDur || e.dur) * spt(ex) / factor(), 0.55); });
     P.vq.push({ on: now, off: now + dur, n: e, midi: e.notes[0].midi, started: false });
@@ -2704,7 +2735,6 @@ function parseMusicXML(text) {
         const e = { pos: N.start, dur: N.dur, rest: N.rest, code: N.code, dots: N.dots, notes: N.rest ? [] : [mkNote(N)], vk, hand };
         if (N.restKey) e.restKey = N.restKey;
         if (N.stem) e.stem = N.stem;
-        if (N.finger) e.finger = N.finger;
         if (N.rest && (N.mrest || (N.dur >= len - 1e-6 && N.code === 'w'))) { e.full = true; e.dur = len; }
         if (N.tupN && N.tupN !== N.tupM) {
           let g = tupOpen.get(vk);
@@ -2748,6 +2778,7 @@ function parseMusicXML(text) {
 function mkNote(N) {
   const n = { d: N.d, a: N.a, midi: midiOf(N.d, N.a) };
   if (N.acc !== undefined) n.acc = N.acc;
+  if (N.finger && /^[1-5]$/.test(String(N.finger).trim())) n.fg = +N.finger;   // 原谱自带的指法
   if (N.tieStart) n.tieStart = true;
   if (N.tieStop) n.tieStop = true;
   return n;
@@ -3125,7 +3156,7 @@ function learnPages(piece) {
 
 /* ---------------- 练习数据 ---------------- */
 function learnDefaults(n) {
-  return { a: 1, b: Math.min(n, 8), method: 'plan', plan: { i: 0 }, planV: 1, ladder: { start: 60, step: 5, speed: 60 }, back: { chunk: 2, stage: 1 }, need: 3, streak: 0, speed: 80, heat: true, loop: true, stats: {}, log: [], days: {} };
+  return { a: 1, b: Math.min(n, 8), method: 'plan', plan: { i: 0 }, planV: 2, finger: true, ladder: { start: 60, step: 5, speed: 60 }, back: { chunk: 2, stage: 1 }, need: 3, streak: 0, speed: 80, heat: true, loop: true, stats: {}, log: [], days: {} };
 }
 function learnSave() { if (LM.id && LM.data) lsSet('sr.learn.' + LM.id, LM.data); }
 function learnActiveRange() {
@@ -3167,7 +3198,8 @@ function planSegments(bars) {
   }
   return segs;
 }
-// 生成全部步骤。每段：没学过的手先单手（等待模式 → 70% → 原速），再双手（等待模式 → 60% → 80% → 原速）；
+// 生成全部步骤。每段：没学过的手先单手（先听一遍 → 等待模式 → 70% 跟着示范 → 原速自己弹），再双手（等待模式 → 60% → 80% → 原速）；
+// 单手时 App 只在“先听一遍”和 70% 这两步弹这只手做示范，另一只手不出声；
 // 两只手都和前面学过的小节基本一样时只复习（双手 80% → 原速）。从第二段起每段和上一段连起来练；
 // 每 4 段（约 16 小节）连成一大段；最后整首。
 function planSteps(piece) {
@@ -3198,9 +3230,10 @@ function planSteps(piece) {
     const both = has.rh && has.lh;
     const hh = both ? 'both' : has.rh ? 'rh' : 'lh';
     if (both) for (const h of ['rh', 'lh']) if (isNew[h]) {
+      add({ ...R, hand: h, kind: 'listen', need: 1, sound: 'mine' });
       add({ ...R, hand: h, wait: true });
-      add({ ...R, hand: h, speed: 70 });
-      add({ ...R, hand: h, speed: 100 });
+      add({ ...R, hand: h, speed: 70, sound: 'mine' });
+      add({ ...R, hand: h, speed: 100, metro: true });
     }
     if (isNew.rh || isNew.lh) {
       add({ ...R, hand: hh, wait: true });
@@ -3222,15 +3255,26 @@ function planSteps(piece) {
   }
   return { segs, steps };
 }
+// 旧版计划（没有“先听一遍”）的第 i 步，对应现在的第几步；正要开始单手认音的，从它前面的“先听一遍”开始
+function planMigrateIdx(steps, i) {
+  const old = []; steps.forEach((st, k) => { if (st.kind !== 'listen') old.push(k); });
+  if (i >= old.length) return steps.length;
+  const k = old[Math.max(0, i)];
+  return k > 0 && steps[k - 1].kind === 'listen' ? k - 1 : k;
+}
+function planListening() { const st = planOn() && !planDone() ? planStep() : null; return !!st && st.kind === 'listen'; }
+// 本步 App 出什么声：示范（只弹我练的手）或不出声。等待模式没连 MIDI 时改成慢速示范
+function planSound(st) { if (st.wait) return MIDI.connected ? 'none' : (st.hand === 'both' ? 'none' : 'mine'); return st.sound || 'none'; }
+function planMetro(st) { if (st.wait) return !MIDI.connected && st.hand === 'both'; return st.kind !== 'listen' && (st.hand === 'both' || !!st.metro); }
 function planOn() { return LM.active && LM.data && LM.data.method === 'plan' && LM.plan && LM.plan.steps.length > 0; }
 function planIdx() { return clamp(LM.data.plan.i, 0, LM.plan.steps.length - 1); }
 function planStep() { return planOn() ? LM.plan.steps[planIdx()] : null; }
 function planDone() { return planOn() && LM.data.plan.i >= LM.plan.steps.length; }
 // 本步实际用的速度：等待模式（需要 MIDI）不看速度；没连 MIDI 时等待模式换成 50% 慢速
 function planSpeed(st) { return st.wait ? 50 : st.speed; }
-function planSpeedText(st) { return st.wait ? (MIDI.connected ? '等待模式' : '50% 慢速') : `${st.speed}%`; }
+function planSpeedText(st) { if (st.kind === 'listen') return '先听一遍'; return st.wait ? (MIDI.connected ? '等待模式' : '50% 慢速') : `${st.speed}%`; }
 function planStepLabel(st) {
-  const pre = { join: '连接 ', run: '大段 ', whole: '整首 ', review: '复习 ', learn: '' }[st.kind];
+  const pre = { join: '连接 ', run: '大段 ', whole: '整首 ', review: '复习 ', learn: '', listen: '' }[st.kind];
   return `${pre}第${st.a}–${st.b}小节 · ${HAND_CN[st.hand]} · ${planSpeedText(st)}`;
 }
 function planWhy(st) {
@@ -3239,9 +3283,12 @@ function planWhy(st) {
   if (st.kind === 'run') return `把这几段连成一大段（第 ${st.a}–${st.b} 小节）。`;
   if (st.kind === 'whole') return '所有段落都学过了：整首连起来。';
   if (st.kind === 'review') return '这一段和前面学过的小节基本一样，双手直接复习。';
+  if (st.kind === 'listen') return `先不弹：听 App 把${HAND_CN[st.hand]}这一段原速弹一遍，看着谱和指法，记住它该是什么声音。听完自动进下一步。`;
   if (st.hand !== 'both') {
-    if (st.wait) return MIDI.connected ? `先单手认音：等待模式下你弹对了光标才往前走，不用管节奏。${other}由 App 弹，谱上画成浅色。` : `先单手认音，慢速。${other}由 App 弹，谱上画成浅色。`;
-    return `${HAND_CN[st.hand]}跟着拍子弹，${other}由 App 弹（浅色）。`;
+    const dim = `${other}不出声，谱上画成浅色。`;
+    if (st.wait) return MIDI.connected ? `单手认音：等待模式下你弹对了光标才往前走，不用管节奏。App 不出声，只听你自己弹的。${dim}` : `单手认音，慢速，App 弹${HAND_CN[st.hand]}做示范。${dim}`;
+    if (st.sound === 'mine') return `${HAND_CN[st.hand]}跟着 App 的示范一起弹，把节奏弹稳。${dim}`;
+    return `${HAND_CN[st.hand]}自己弹：App 不再示范，只有节拍器。${dim}`;
   }
   if (st.wait) return MIDI.connected ? '双手合起来：等待模式，先找准两只手的配合，不用管节奏。' : '双手合起来，慢速，先找准两只手的配合。';
   return `双手跟着节拍器弹，${st.speed}%。`;
@@ -3251,10 +3298,10 @@ function planApply() {
   const st = planStep(); if (!st) return;
   const D = LM.data;
   D.a = st.a; D.b = st.b;
-  S.settings.hand = st.hand; S.settings.sound = 'others';
+  S.settings.hand = st.hand; S.settings.sound = planSound(st);
   S.settings.follow = !!(st.wait && MIDI.connected);
-  S.settings.metro = st.hand === 'both' && !st.wait;
-  $('selHand').value = st.hand; $('selSound').value = 'others'; $('cMetro').checked = S.settings.metro;
+  S.settings.metro = planMetro(st);
+  $('selHand').value = st.hand; $('selSound').value = S.settings.sound; $('cMetro').checked = S.settings.metro;
   const cf = $('cFollow'); if (cf) cf.checked = S.settings.follow;
   updateHandDim();
   if (S.settings.speed !== planSpeed(st)) setSpeed(planSpeed(st)); else saveSettings();
@@ -3289,6 +3336,204 @@ function planRenderList() {
   const cur = LM.data.plan.i;
   box.innerHTML = '<ol>' + LM.plan.steps.map((st, i) => `<li class="${i < cur ? 'done' : i === cur ? 'cur' : ''}">${i < cur ? '✓ ' : ''}${planStepLabel(st)}</li>`).join('') + '</ol>';
   const c = box.querySelector('li.cur'); if (c && !box.hidden) box.scrollTop = Math.max(0, c.offsetTop - box.clientHeight / 2);
+}
+
+/* ---------------- 指法提示 ----------------
+ * 原谱（MusicXML）带的指法照用；没有的自动算：把每只手的音按先后排成一串，给每个音（和弦）选手指，
+ * 让“手指跨度不舒服、穿指、同指挪位、拇指和小指上黑键”这些代价的总和最小（动态规划）。
+ * 手指两两之间能够到的音程用 Parncutt 等 1997 年的表（半音数，右手从小指号到大指号）：
+ * [勉强最小, 舒服最小, 放松最小, 放松最大, 舒服最大, 勉强最大]
+ * 只在需要提示的地方显示：每段的第一个音，以及手离开“五指原位”的地方（穿指、扩指、换把位、跳）。 */
+const FG_SPAN = { 12: [-5, -3, 1, 5, 8, 10], 13: [-4, -2, 3, 7, 10, 12], 14: [-3, -1, 5, 9, 12, 14], 15: [-1, 1, 7, 10, 13, 15], 23: [1, 1, 1, 2, 3, 5], 24: [1, 1, 3, 4, 5, 7], 25: [2, 2, 5, 6, 8, 10], 34: [1, 1, 1, 2, 2, 4], 35: [1, 1, 3, 4, 5, 7], 45: [1, 1, 1, 2, 3, 5] };
+const FG_JUMP = 16;
+const fgBlack = (m) => [1, 3, 6, 8, 10].includes(mod(m, 12));
+// 先用 f1 弹 m1、再用 f2 弹 m2（连着弹）的代价
+function fgPair(m1, f1, m2, f2, lh) {
+  let d = m2 - m1; if (lh) d = -d;
+  if (d === 0) return f1 === f2 ? 0 : 4;   // 同音换指
+  if (f1 === f2) return 10 + Math.abs(d) * 0.5;   // 同一个手指挪到别的音
+  const lo = Math.min(f1, f2), hi = Math.max(f1, f2), T = FG_SPAN[lo * 10 + hi];
+  const s = f1 < f2 ? d : -d;
+  // 够不着：只能挪手。往哪边挪，就倾向于用那一侧最外面的手指落下（往低音挪，左手落小指、右手落拇指）
+  if (s < T[0] || s > T[5]) return FG_JUMP + 0.3 * (d > 0 ? f1 - 1 + 5 - f2 : 5 - f1 + f2 - 1);
+  if (s < 0) {   // 穿指（拇指从下面穿，或别的手指从拇指上面跨）
+    const tm = f1 === 1 ? m1 : m2, om = f1 === 1 ? m2 : m1;
+    return 2 - 1.5 * s + 2 * Math.max(0, T[1] - s) + (hi === 4 ? 0.7 : hi === 5 ? 3 : 0) + (fgBlack(tm) && !fgBlack(om) ? 3 : 0);
+  }
+  const w = lo === 1 ? 1 : 2;
+  let c = 0;
+  if (s < T[1]) c += 2 * (T[1] - s); else if (s > T[4]) c += 2 * (s - T[4]);
+  if (s < T[2]) c += w * (T[2] - s); else if (s > T[3]) c += w * (s - T[3]);
+  return c;
+}
+// 同时按住几个音（和弦，或一个音按着、另一个音在动）的代价
+function fgChord(ns, fs, lh) {
+  let c = 0;
+  for (let i = 0; i < ns.length; i++) {
+    const f = fs[i], m = ns[i].midi;
+    if (f >= 4) c += 0.5;
+    if (fgBlack(m)) c += f === 1 ? 2 : f === 5 ? 1 : 0;
+  }
+  const pair = (i, j) => {
+    let a = i, b = j; if (fs[a] > fs[b]) [a, b] = [b, a];
+    const T = FG_SPAN[fs[a] * 10 + fs[b]];
+    let sp = ns[b].midi - ns[a].midi; if (lh) sp = -sp;
+    if (sp > T[5]) return 30 + 3 * (sp - T[5]);
+    let x = 0;
+    if (sp > T[4]) x += 2 * (sp - T[4]);
+    if (sp > T[3]) x += sp - T[3]; else if (sp < T[2]) x += T[2] - sp;
+    return x;
+  };
+  for (let i = 0; i + 1 < ns.length; i++) c += pair(i, i + 1);
+  if (ns.length > 2) c += pair(0, ns.length - 1);
+  return c;
+}
+const FG_COMBOS = (() => { const out = { 0: [[]] }; for (let k = 1; k <= 5; k++) { out[k] = []; const rec = (st, acc) => { if (acc.length === k) { out[k].push(acc); return; } for (let f = st; f <= 5; f++) rec(f + 1, [...acc, f]); }; rec(1, []); } return out; })();
+// 一只手的全部起音位置
+function fgOnsets(bars, h) {
+  const ons = []; let t0 = 0;
+  bars.forEach((bar, bi) => {
+    const m = new Map();
+    for (const e of bar[h]) {
+      if (e.rest) continue;
+      e.notes.forEach((n, i) => {
+        if (n.tieStop) return;
+        let o = m.get(e.pos); if (!o) m.set(e.pos, (o = { t: t0 + e.pos, bi, items: [] }));
+        o.items.push({ e, i, midi: n.midi, d: n.d, end: t0 + e.pos + (n.tieDur || e.dur), fix: n.fg });
+      });
+    }
+    [...m.keys()].sort((a, b) => a - b).forEach((k) => ons.push(m.get(k)));
+    t0 += bar.len;
+  });
+  return ons;
+}
+function fgSolveHand(bars, h) {
+  const lh = h === 'lh';
+  const ons = fgOnsets(bars, h);
+  let prev = null;
+  for (const o of ons) {
+    // 这一刻新弹的音（同音只算一个；一只手最多 5 个）
+    const seen = new Map();
+    for (const it of o.items) { if (seen.has(it.midi)) { const x = seen.get(it.midi); x.dup.push(it); if (it.fix && !x.fix) x.fix = it.fix; x.end = Math.max(x.end, it.end); } else seen.set(it.midi, { midi: it.midi, d: it.d, end: it.end, fix: it.fix, it, dup: [], held: false }); }
+    let nw = [...seen.values()].sort((a, b) => a.midi - b.midi);
+    if (nw.length > 5) nw = lh ? nw.slice(0, 5) : nw.slice(-5);
+    // 上一刻弹的、现在还按着的音：手指不能动。够不着的（靠踏板延音）不算
+    let held = prev ? prev.ns.filter((x) => x.end > o.t + 1e-6 && !seen.has(x.midi)).map((x) => ({ midi: x.midi, d: x.d, end: x.end, held: true })) : [];
+    if (held.length) { const all = [...nw, ...held].map((x) => x.midi); if (nw.length + held.length > 5 || Math.max(...all) - Math.min(...all) > 14) held = []; }
+    o.ns = [...nw, ...held].sort((a, b) => a.midi - b.midi);
+    o.hasHeld = held.length > 0;
+    let st = FG_COMBOS[o.ns.length].map((c) => (lh ? c.slice().reverse() : c));
+    const fixed = st.filter((fs) => o.ns.every((x, i) => !x.fix || x.fix === fs[i]));
+    if (fixed.length) st = fixed;
+    o.st = st; o.base = st.map((fs) => fgChord(o.ns, fs, lh));
+    prev = o;
+  }
+  // 动态规划。状态 = （上一刻的手指，这一刻的手指）：这样“穿过去弹一个音再回来”可以按回到原来的手位算，
+  // 不会被当成又挪了一次手。
+  const N = ons.length; if (!N) return ons;
+  const trans = (p, o, tp = p) => {   // p 的每种指法 → o 的每种指法 的代价（来得及挪手的时间按紧挨着的前一刻 tp 算）
+    const gap = o.t - Math.max(...tp.ns.map((x) => x.end));
+    // 中间有休止、或者前一个音够长，手来得及挪：挪手的代价封顶
+    const held0 = o.t - tp.t;
+    const cap = gap >= 24 - 1e-6 ? 2 : gap >= 12 - 1e-6 ? 5 : held0 >= 48 - 1e-6 ? 6 : held0 >= 24 - 1e-6 ? 10 : FG_JUMP;
+    const tr = (a, fa, b, fb) => (a.midi === b.midi && gap < 48 ? fgPair(a.midi, fa, b.midi, fb, lh) : ((c) => (c >= FG_JUMP ? Math.min(cap, FG_JUMP) + (c - FG_JUMP) : Math.min(cap, c) + 0.05 * c))(fgPair(a.midi, fa, b.midi, fb, lh)));
+    const ph = p.ns.length - 1, ch = o.ns.length - 1;
+    return p.st.map((pf) => o.st.map((fs) => (tr(p.ns[0], pf[0], o.ns[0], fs[0]) + tr(p.ns[ph], pf[ph], o.ns[ch], fs[ch])) / 2));
+  };
+  const heldCost = (p, o) => {   // 按着不放的音手指不能换
+    const hi = o.ns.map((x) => (x.held ? p.ns.findIndex((y) => y.midi === x.midi) : -1));
+    return p.st.map((pf) => o.st.map((fs) => { let c = 0; for (let i = 0; i < fs.length; i++) if (hi[i] >= 0 && pf[hi[i]] !== fs[i]) c += 1000; return c; }));
+  };
+  // cost[p][s]：上一刻用 p、这一刻用 s 的最小总代价；back[k][p][s] = 再上一刻的指法
+  let cost = [ons[0].base.slice()];
+  const backs = [null];
+  for (let k = 1; k < N; k++) {
+    const o = ons[k], p = ons[k - 1];
+    const D1 = o.hasHeld ? heldCost(p, o) : trans(p, o);
+    // 上一步是穿指（手没挪，只是一个手指穿过去）时，这一步可以按“回到穿指之前的手位”算
+    const q0 = k >= 2 ? ons[k - 2] : null;
+    const D2 = !o.hasHeld && q0 && !p.hasHeld && q0.ns.length === 1 && p.ns.length === 1 ? trans(q0, o, p) : null;
+    const X = D2 ? q0.st.map((qf) => p.st.map((pf) => { const fa = qf[0], fb = pf[0]; if (fa === fb || Math.min(fa, fb) !== 1) return false; const d = (p.ns[0].midi - q0.ns[0].midi) * (lh ? -1 : 1), sp = fa < fb ? d : -d; return sp < 0 && sp >= FG_SPAN[10 + Math.max(fa, fb)][0]; })) : null;
+    const next = [], back = [];
+    for (let pi = 0; pi < p.st.length; pi++) {
+      next.push(new Array(o.st.length)); back.push(new Array(o.st.length));
+      for (let si = 0; si < o.st.length; si++) {
+        let best = Infinity, bq = 0;
+        for (let qi = 0; qi < cost.length; qi++) {
+          let t = D1[pi][si]; if (D2 && X[qi][pi]) t = Math.min(t, D2[qi][si] + 1);
+          const c = cost[qi][pi] + t;
+          if (c < best) { best = c; bq = qi; }
+        }
+        next[pi][si] = best + o.base[si]; back[pi][si] = bq;
+      }
+    }
+    cost = next; backs.push(back);
+  }
+  let bp = 0, bs = 0, bc = Infinity;
+  cost.forEach((row, pi) => row.forEach((c, si) => { if (c < bc) { bc = c; bp = pi; bs = si; } }));
+  for (let k = N - 1; k >= 0; k--) {
+    ons[k].fs = ons[k].st[bs];
+    if (k > 0) { const q = backs[k][bp][bs]; bs = bp; bp = q; }
+  }
+  for (const o of ons) o.st = o.base = null;
+  return ons;
+}
+// 从上一个音到这个音，是不是还在“五指原位”里（相邻的手指弹相邻的音）：是的话不用提示
+function fgPredictable(a, fa, b, fb, lh) {
+  if (a.midi === b.midi) return fa === fb;
+  const dd = (b.d - a.d) * (lh ? -1 : 1);
+  return fb - fa === dd && Math.abs(b.midi - a.midi) <= 7;
+}
+function fgCompute(piece, segs) {
+  const segStart = new Set(segs.map((s) => s.a - 1));
+  const res = {};
+  for (const h of ['rh', 'lh']) {
+    const lh = h === 'lh';
+    const ons = fgSolveHand(piece.bars, h);
+    const shown = new Map(); let barOf = -1, inBar = 0, hasSrc = false;
+    ons.forEach((o, k) => {
+      const nw = []; o.ns.forEach((x, i) => { if (!x.held) nw.push({ x, f: o.fs[i] }); });
+      const p = k ? ons[k - 1] : null;
+      const first = segStart.has(o.bi) && (!p || p.bi !== o.bi) || !p;
+      let show = first;
+      if (!show && !o.hasHeld) {
+        const ph = p.ns.length - 1, ch = o.ns.length - 1;
+        show = !fgPredictable(p.ns[0], p.fs[0], o.ns[0], o.fs[0], lh) || !fgPredictable(p.ns[ph], p.fs[ph], o.ns[ch], o.fs[ch], lh);
+      } else if (!show) show = nw.some(({ x, f }) => !o.ns.some((y, i) => y.held && fgPredictable(y, o.fs[i], x, f, lh)));
+      // 同样的手型（从哪个手指到哪个手指、隔几个半音；挪手之后落在哪个手指上）前面 8 小节内提示过就不重复
+      let key = nw.map(({ x, f }) => f + '@' + (x.midi - nw[0].x.midi)).join(' ');
+      if (o.hasHeld) { const hi = o.ns.findIndex((y) => y.held); key = 'H' + o.fs[hi] + '@' + (nw[0].x.midi - o.ns[hi].midi) + '|' + key; }
+      else if (p && nw.length === 1) {
+        const a = p.ns[0], fa = p.fs[0], b = o.ns[0], fb = o.fs[0];
+        const T = fa !== fb ? FG_SPAN[Math.min(fa, fb) * 10 + Math.max(fa, fb)] : null;
+        const sp = ((b.midi - a.midi) * (lh ? -1 : 1)) * (fa < fb ? 1 : -1);
+        const jump = o.t - Math.max(...p.ns.map((x) => x.end)) >= 24 - 1e-6 || (T ? sp < T[0] || sp > T[5] : a.midi !== b.midi);
+        key = (jump ? 'J' : fa + '>' + (b.midi - a.midi)) + '|' + key;
+      }
+      if (show && !first && shown.has(key) && o.bi - shown.get(key) < 8) show = false;
+      // 一小节里一只手最多提示 3 处，免得满谱都是数字
+      if (o.bi !== barOf) { barOf = o.bi; inBar = 0; }
+      if (show && !first && inBar >= 3) show = false;
+      if (show) { shown.set(key, o.bi); inBar++; }
+      for (const { x, f } of nw) for (const it of [x.it, ...x.dup]) {
+        const e = it.e; (e.fgAll = e.fgAll || [])[it.i] = f;
+        if (x.fix) { (e.fgSrc = e.fgSrc || [])[it.i] = x.fix; hasSrc = true; }
+        else if (show && it === x.it) (e.fgAuto = e.fgAuto || [])[it.i] = f;
+      }
+    });
+    res[h] = { n: ons.length, src: hasSrc };
+  }
+  piece._fg = res;
+}
+// 决定谱上显示哪些指法：原谱的总是显示，自动算的可以关掉
+function fingerApply(piece, on) {
+  if (!piece._fg) fgCompute(piece, (LM.plan && LM.piece === piece ? LM.plan.segs : planSegments(piece.bars)));
+  for (const b of piece.bars) for (const h of ['rh', 'lh']) for (const e of b[h]) {
+    if (e.rest) continue;
+    let sh = null;
+    e.notes.forEach((n, i) => { const f = (e.fgSrc && e.fgSrc[i]) || (on && e.fgAuto && e.fgAuto[i]); if (f) (sh = sh || [])[i] = f; });
+    if (sh) e.fgShow = sh; else delete e.fgShow;
+  }
 }
 
 /* ---------------- 播放、评分 ---------------- */
@@ -3340,7 +3585,7 @@ function learnResetScore(fromT0 = -1) {
   const from = fromT0 < 0 ? LM.startT0 : fromT0;
   SC.L = { hit: 0, miss: 0, wrong: 0, exp: [], idx: 0, bars: {} };
   for (const b of LM.bars) if (b.t1 > LM.startT0 && b.t0 < LM.endT0) for (const h of ['rh', 'lh']) for (const e of b[h]) if (e.el) e.el.classList.remove('hit', 'miss', 'expect');
-  if (MIDI.connected) SC.L.exp = S.ev.filter((e) => e.kind === 'note' && e.t0 >= from - 1e-6 && e.t0 < LM.endT0 - 1e-6 && practiceHand(e.hand)).map((e) => ({ t0: e.t0, midi: e.midi, e: e.e, hit: false }));
+  if (MIDI.connected && !planListening()) SC.L.exp = S.ev.filter((e) => e.kind === 'note' && e.t0 >= from - 1e-6 && e.t0 < LM.endT0 - 1e-6 && practiceHand(e.hand)).map((e) => ({ t0: e.t0, midi: e.midi, e: e.e, hit: false }));
   hud();
 }
 // 一遍结束：统计、判断是否弹对、推进速度阶梯 / 从后往前
@@ -3348,7 +3593,8 @@ function learnPassEnd(pp) {
   const D = LM.data; const sc = SC.L;
   if (sc && MIDI.connected && P.mode === 'play') sweepMisses(LM.endT0 + 60);
   let clean = null;
-  if (sc && MIDI.connected && sc.exp.length + sc.hit > 0) {
+  if (planListening()) { if (pp.full) planJudgeDone(); }   // 听完一遍就进下一步
+  else if (sc && MIDI.connected && sc.exp.length + sc.hit > 0) {
     const exp = P.mode === 'follow' ? sc.hit : sc.exp.length;
     // 60 个音以内：不漏音、错音不超过 1 个；更长的段落每 60 个音允许 1 个错（漏音 + 错音）
     clean = exp <= 60 ? sc.miss === 0 && sc.wrong <= 1 && sc.hit >= exp : sc.miss + sc.wrong <= Math.floor(exp / 60);
@@ -3426,7 +3672,7 @@ function learnHudUpdate() {
   const D = LM.data; const R = learnActiveRange();
   const rng = `第${R.a}–${R.b}小节`;
   if (planDone()) LM.hud = '🎉 学习计划已完成 · ' + rng + ' · 循环';
-  else if (planOn()) { const st = planStep(); LM.hud = `${planIdx() + 1}/${LM.plan.steps.length}步 ${HAND_CN[st.hand]} ${st.wait && MIDI.connected ? '等待' : planSpeed(st) + '%'} ${D.streak}/${st.need}`; }
+  else if (planOn()) { const st = planStep(); LM.hud = `${planIdx() + 1}/${LM.plan.steps.length}步 ${HAND_CN[st.hand]} ` + (st.kind === 'listen' ? '先听一遍' : `${st.wait && MIDI.connected ? '等待' : planSpeed(st) + '%'} ${D.streak}/${st.need}`); }
   else if (D.method === 'ladder') LM.hud = `${rng} · 阶梯 ${S.settings.speed}% · ${D.streak}/${D.need}`;
   else if (D.method === 'back') LM.hud = `${rng} · 倒练 ${D.back.stage}/${learnBackStages()} 步 · ${D.streak}/${D.need}`;
   else LM.hud = rng + ' · 循环';
@@ -3437,6 +3683,7 @@ function learnStatusText() {
   const D = LM.data; const R = learnActiveRange();
   const judge = MIDI.connected ? '每遍结束自动判断（60 个音以内：没有漏音、错音不超过 1 个算弹对；更长的段落每 60 个音允许错 1 个）' : '没有连接 MIDI：每弹对一遍，点“✓ 这遍弹对了”';
   if (planDone()) return `学习计划 ${LM.plan.steps.length} 步全部完成。现在是整首自由循环；想再从头走一遍计划，点“从第 1 步重来”。`;
+  if (planListening()) { const st = planStep(); return `学习计划第 ${planIdx() + 1}/${LM.plan.steps.length} 步：${planStepLabel(st)}。${planWhy(st)}`; }
   if (planOn()) { const st = planStep(); return `学习计划第 ${planIdx() + 1}/${LM.plan.steps.length} 步：${planStepLabel(st)}。${planWhy(st)}连续弹对 ${st.need} 遍过关，已经 ${D.streak}/${st.need}。${judge}。`; }
   if (D.method === 'ladder') return `速度阶梯：现在 ${S.settings.speed}%，第 ${R.a}–${R.b} 小节已连续弹对 ${D.streak}/${D.need} 遍。${judge}。`;
   if (D.method === 'back') return `从后往前：第 ${D.back.stage}/${learnBackStages()} 步，现在练第 ${R.a}–${R.b} 小节，已连续弹对 ${D.streak}/${D.need} 遍。${judge}。`;
@@ -3495,6 +3742,8 @@ async function learnEnter(id) {
   if (!LM.data.planV) { LM.data.planV = 1; LM.data.method = 'plan'; LM.data.streak = 0; }   // 旧记录：默认改用学习计划
   if (!LM.data.plan) LM.data.plan = { i: 0 };
   LM.plan = planSteps(piece);
+  fingerApply(piece, LM.data.finger !== false);
+  if (LM.data.planV < 2) { LM.data.plan.i = planMigrateIdx(LM.plan.steps, LM.data.plan.i); LM.data.planV = 2; LM.data.streak = 0; }   // 计划加了“先听一遍”，步数对到新编号
   LM.data.plan.i = clamp(LM.data.plan.i, 0, LM.plan.steps.length);
   LM.loop = LM.data.loop !== false;
   lsSet('sr.mode', 'learn'); lsSet('sr.lastPiece', id);
@@ -3666,7 +3915,8 @@ function learnUpdatePanel() {
   document.querySelectorAll('.lmanual').forEach((x) => { x.hidden = D.method === 'plan'; });
   document.querySelectorAll('.lplanonly').forEach((x) => { x.hidden = D.method !== 'plan'; });
   planRenderList();
-  $('lOk').hidden = MIDI.connected || D.method === 'free';
+  $('lOk').hidden = MIDI.connected || D.method === 'free' || planListening();
+  $('lFinger').checked = D.finger !== false;
   $('lStatus').textContent = learnStatusText();
   // 进度
   const days = Object.entries(D.days).sort((a, b) => (a[0] < b[0] ? 1 : -1)).slice(0, 5);
@@ -3744,6 +3994,7 @@ function learnInitUI() {
   $('lNeed').onchange = (e) => { LM.data.need = +e.target.value; LM.data.streak = 0; learnSave(); learnHudUpdate(); learnUpdatePanel(); };
   $('lLoop').onchange = (e) => { LM.loop = e.target.checked; LM.data.loop = LM.loop; learnSave(); };
   $('lHeat').onchange = (e) => { LM.data.heat = e.target.checked; learnSave(); learnPaint(); };
+  $('lFinger').onchange = (e) => { LM.data.finger = e.target.checked; learnSave(); fingerApply(LM.piece, LM.data.finger); learnRebuild(); };
   $('lOk').onclick = () => { if (LM.active) { learnJudge(true, '手动确认'); learnSave(); learnUpdatePanel(); } };
   $('lPlanPrev').onclick = () => { if (planOn()) planGo(Math.min(LM.data.plan.i, LM.plan.steps.length) - 1, null); };
   $('lPlanSkip').onclick = () => { if (planOn() && !planDone()) planGo(LM.data.plan.i + 1, null); };

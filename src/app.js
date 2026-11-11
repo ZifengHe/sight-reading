@@ -1121,6 +1121,10 @@ function lineGeom(ex, ln) {
     const has = (h) => ln.some((i) => ex.bars[i][h].some((e) => e.tupN));
     if (has('rh')) above += 26;
     if (has('lh')) below += 28;
+    // 指法数字：右手写在上方、左手写在下方（和弦的几个数字竖着叠）
+    const fgN = (h) => Math.max(0, ...ln.map((i) => Math.max(0, ...ex.bars[i][h].map((e) => (e.fgShow ? e.fgShow.filter(Boolean).length : 0)))));
+    if (fgN('rh')) above += 4 + 11 * fgN('rh');
+    if (fgN('lh')) below += 4 + 11 * fgN('lh');
   }
   const gap = Math.min(150, 44 + Math.max(0, 30 - rhMin) * 5 + Math.max(0, lhMax - 26) * 5 + (dyn ? 16 : 0));
   const trebleY = above - 40, bassY = trebleY + 40 + gap;
@@ -1199,6 +1203,7 @@ function renderExercise(ex, div, cw, pageH, nLines, li) {
         V.voices.forEach((v) => v.draw(ctx, st));
         V.beams.forEach((b) => b.setContext(ctx).draw());
         V.tuplets.forEach((t) => t.setContext(ctx).draw());
+        if (ex.learn) drawFingerings(ctx, bar[h], h, st, V.tuplets);
         ctx.closeGroup();
       }
       // 光标锚点：每个起音位置的 x
@@ -1223,6 +1228,29 @@ function renderExercise(ex, div, cw, pageH, nLines, li) {
   });
   ex.zoom = zoom;
   if (ex.learn) learnAfterRender(ex);
+}
+// 指法数字（学曲子模式）：右手在音符上方、左手在下方，躲开符干、符杠和连音数字
+function drawFingerings(ctx, evs, h, stave, tuplets) {
+  const up = h === 'rh';
+  // 连音数字（和括号）的位置：指法要写到它的外面
+  const tupY = new Map();
+  for (const tp of tuplets || []) { try { const y = tp.getYPosition(); for (const n of (tp.getNotes ? tp.getNotes() : tp.notes)) tupY.set(n, y); } catch (er) { } }
+  for (const e of evs) {
+    if (!e.fgShow || !e.sn) continue;
+    const fs = []; e.fgShow.forEach((f) => { if (f) fs.push(f); });
+    if (!fs.length) continue;
+    let cx, y0, y1;
+    try {
+      cx = (e.sn.getNoteHeadBeginX() + e.sn.getNoteHeadEndX()) / 2;
+      const ys = e.sn.getYs(); y0 = Math.min(...ys) - 5; y1 = Math.max(...ys) + 5;
+      if (e.sn.hasStem()) { const se = e.sn.getStemExtents(); y0 = Math.min(y0, se.topY, se.baseY); y1 = Math.max(y1, se.topY, se.baseY); }
+    } catch (er) { continue; }
+    if (tupY.has(e.sn)) { const ty = tupY.get(e.sn); if (up) y0 = Math.min(y0, ty - 9); else y1 = Math.max(y1, ty + 9); }
+    ctx.save(); ctx.setFont('Arial', 12, 'bold'); ctx.setFillStyle('#1d5fd6');   // 蓝色：和连音的 3 区分开
+    if (up) { let y = Math.min(y0, stave.getYForLine(0)) - 4; for (const f of fs) { ctx.fillText(String(f), cx - 3, y); y -= 11; } }
+    else { let y = Math.max(y1, stave.getYForLine(4)) + 12; for (const f of fs.reverse()) { ctx.fillText(String(f), cx - 3, y); y += 11; } }
+    ctx.restore();
+  }
 }
 // 连音线：同一行内画完整的；跨行、跨页的两头各画半条
 function drawTies(ex, ln, ctx) {
@@ -1346,7 +1374,7 @@ function posT0(now) {
   return a.t0 + (now - a.ctx) * a.f;
 }
 function lowerBound(arr, t0) { let lo = 0, hi = arr.length; while (lo < hi) { const m = (lo + hi) >> 1; if (arr[m].t0 < t0) lo = m + 1; else hi = m; } return lo; }
-function handPlays(h) { const s = S.settings.sound; if (s === 'none') return false; if (s === 'all') return true; return !(S.settings.hand === 'both' || S.settings.hand === h); }
+function handPlays(h) { const s = S.settings.sound; if (s === 'none') return false; if (s === 'all') return true; const mine = S.settings.hand === 'both' || S.settings.hand === h; return s === 'mine' ? mine : !mine; }
 function practiceHand(h) { return S.settings.hand === 'both' || S.settings.hand === h; }
 
 async function startPlay() {
@@ -1607,6 +1635,7 @@ function onNoteOn(m, vel) {
   if (!P.playing && !onNoteOn.hinted) { onNoteOn.hinted = true; toast('已收到琴键：按 ▶ 播放后跟着弹，弹对变绿、漏掉变红；想让光标等你，在设置里打开“等待模式”'); }
   if (S.settings.midiSound && AU.ctx) AU.note(m, AU.ctx.currentTime, 0.6, 0.4 + vel / 200);
   if (!P.playing) return;
+  if (LM.active && planListening()) return;   // “先听一遍”这一步不评分
   if (P.mode === 'follow') return followNote(m);
   const sc = SC[scKey()]; if (!sc) return;
   const t = posT0(AU.ctx.currentTime);
@@ -1710,7 +1739,7 @@ function playOthers(o) {
   const now = AU.ctx.currentTime;
   const ex = S.exs[o.ex];
   for (const e of o.evs) {
-    if (practiceHand(e.hand) || !handPlays(e.hand)) continue;
+    if (practiceHand(e.hand) || !handPlays(e.hand)) continue;   // 等待模式：自己弹的手不由 App 出声
     const dur = e.dur * spt(ex) / factor();
     e.notes.forEach((n) => { if (!n.tieStop) AU.note(n.midi, now, (n.tieDur || e.dur) * spt(ex) / factor(), 0.55); });
     P.vq.push({ on: now, off: now + dur, n: e, midi: e.notes[0].midi, started: false });
