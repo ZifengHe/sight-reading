@@ -112,6 +112,7 @@ body.nomidi .midi{display:none!important}
 .k.play{background:var(--accent)!important}
 .k.user{background:var(--accent2)!important}
 .k.bad{background:var(--bad)!important}
+#cnum{position:absolute;left:-4px;bottom:-2px;width:26px;height:20px;border-radius:10px;background:rgba(47,111,222,.92);color:#fff;font-weight:700;font-size:14px;line-height:20px;text-align:center;display:none;font-variant-numeric:tabular-nums}
 #loading{position:fixed;inset:0;background:rgba(239,233,220,.92);z-index:100;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;font-size:16px;color:#5a5245}
 #loading.show{display:flex}
 #loadTrack{width:280px;height:8px;border-radius:4px;background:#ddd3bf;overflow:hidden}
@@ -208,6 +209,7 @@ body.nomidi .midi{display:none!important}
       <label><input type="checkbox" id="cScroll" checked> 换曲自动翻页</label>
       <label>预备拍 <select id="selCount"><option value="1">1 小节</option><option value="2">2 小节</option><option value="3">3 小节</option></select></label>
       <label><input type="checkbox" id="cKbd" checked> 屏幕键盘</label>
+      <label><input type="checkbox" id="cNum" checked> 光标下的拍点数字</label>
       <label>音量 <input type="range" id="vol" min="0" max="100" value="80"></label>
       <label>谱面大小 <input type="range" id="zoom" min="50" max="100" step="5" value="100"></label>
       <button id="bNew">🎲 换一套新谱</button>
@@ -252,7 +254,7 @@ body.nomidi .midi{display:none!important}
     </div>
   </div>
 </header>
-<div id="main"><main id="wrap"><div id="score"><div id="cursor"><div id="cbadge"></div></div></div></main>
+<div id="main"><main id="wrap"><div id="score"><div id="cursor"><div id="cbadge"></div><div id="cnum"></div></div></div></main>
 <div id="kbd"></div></div>
 <div id="loading"><div>正在谱写乐曲…</div><div id="loadTrack"><div id="loadBar"></div></div></div>
 <div id="toast"></div>
@@ -273,6 +275,7 @@ body.nomidi .midi{display:none!important}
   <ul>
     <li><b>速度</b>：按每首推荐速度的百分比调整。<kbd>↑</kbd><kbd>↓</kbd> 每次 ±5%。</li>
     <li><b>声音</b>：“全部播放”=先听一遍再弹；“只播我不弹的手”=分手练习时让电脑弹另一只手；“只播我弹的手”=电脑给你练的这只手做示范；“静音”=完全自己弹，只跟光标。</li>
+    <li><b>光标下的拍点数字</b>：播放时光标底部的蓝色数字每小节从 0 数起，一个八分音符加 1（4/4 拍是 0–7），节奏均匀，可以用它数拍子。不想看可以在设置里关掉。</li>
     <li><b>循环本曲</b>：同一首反复练（第二遍以后就不算视奏了，适合难点）。</li>
     <li><b>点击谱面任意小节</b>即可从那里开始。</li>
   </ul>
@@ -1163,7 +1166,7 @@ function validatePiece(pc) {
 const S = {
   seed: 0, exs: [], levelStart: [], ev: [], bars: [], systems: [],
   cur: { ex: 0, bar: 0 },
-  settings: { speed: 100, metro: false, sound: 'all', hand: 'both', loop: false, cont: true, scroll: true, kbd: true, vol: 80, scale: 100, follow: false, midiSound: false, countIn: 1 },
+  settings: { speed: 100, metro: false, sound: 'all', hand: 'both', loop: false, cont: true, scroll: true, kbd: true, vol: 80, scale: 100, follow: false, midiSound: false, countIn: 1, cnum: true },
 };
 // 一行谱的逻辑宽度预算：触屏设备按横屏的长边计算，保证横屏时音符不会太小
 function lineBudget() {
@@ -1535,6 +1538,9 @@ function renderExercise(ex, div, cw, pageH, nLines, li) {
       if (!pts.has(0)) pts.set(0, sx + 12);
       const anchors = [...pts.entries()].sort((a, b) => a[0] - b[0]);
       anchors.push([bar.len, x + w - 6]);
+      // 同一行里，上一小节的终点接到这一小节第一个音上：光标在最后一个音的时值里匀速越过小节线，不在小节线处跳
+      if (ancPrev && ancPrev.sys === S.systems.length && ancPrev.ex === ex) ancPrev.a[ancPrev.a.length - 1][1] = anchors[0][1];
+      ancPrev = { a: anchors, sys: S.systems.length, ex };
       bar.anchors = anchors; bar.sysIdx = S.systems.length; bar.x0 = x; bar.x1 = x + w;
       x += w;
       bar.vf = null; // 释放
@@ -1809,6 +1815,14 @@ function clearHighlights() {
 
 /* ---- 光标与滚动 ---- */
 const cursor = { el: null, badge: null, x: 0, y: 0, h: 0, tx: 0, ty: 0 };
+let ancPrev = null;
+// 光标下面的拍点数字：每小节从 0 数起，一个八分音符加 1（4/4 是 0–7），给眼睛一个均匀的节奏参照
+function setCNum(tick, len) {
+  const el = cursor.num; if (!el) return;
+  if (tick == null || !S.settings.cnum) { if (cursor.numTxt !== '') { el.style.display = 'none'; cursor.numTxt = ''; } return; }
+  const n = String(clamp(Math.floor(tick / 12 + 1e-6), 0, Math.max(0, Math.ceil(len / 12 - 1e-6) - 1)));
+  if (cursor.numTxt !== n) { el.textContent = n; el.style.display = 'block'; cursor.numTxt = n; }
+}
 function cursorXForBar(bar, tick) {
   const a = bar.anchors; if (!a) return 0;
   for (let i = 0; i < a.length - 1; i++) {
@@ -1837,6 +1851,7 @@ function placeIdleCursor() {
   const bar = ex.bars[S.cur.bar];
   if (bar.sysIdx === undefined) return;
   setCursor(bar.sysIdx, bar.anchors[0][1], true);
+  setCNum(null);
   updateStatus(bar);
 }
 // 翻页：把某首练习整屏显示（播放中不滚动，只在换曲时翻页）
@@ -1875,6 +1890,7 @@ function frame() {
         const x = inCount ? bar.anchors[0][1] : cursorXForBar(bar, (t - bar.t0) / spt(ex));
         if (S.settings.scroll && bar.ex !== P.shownEx) flipTo(bar.ex);
         setCursor(bar.sysIdx, x, false);
+        setCNum(inCount ? null : (t - bar.t0) / spt(ex), bar.len);
         // 预备拍倒数：还剩几拍
         if (inCount) {
           const beatDur = ex.ts.beat * spt(ex);
@@ -2085,6 +2101,7 @@ function followFrame(dt) {
   FOL.x = cursor.sys === bar.sysIdx ? lerp(FOL.x, x, Math.min(1, dt * 14)) : x;
   if (S.settings.scroll && bar.ex !== P.shownEx) flipTo(bar.ex);
   setCursor(bar.sysIdx, FOL.x, false);
+  setCNum(o.pos, bar.len);
   cursor.badge.style.display = 'none';
 }
 
@@ -2141,7 +2158,7 @@ function loadSettings() {
 function applySettingsToUI() {
   const st = S.settings;
   $('cMetro').checked = st.metro; $('selSound').value = st.sound; $('selHand').value = st.hand; $('cLoop').checked = st.loop;
-  $('cCont').checked = st.cont; $('cScroll').checked = st.scroll; $('cKbd').checked = st.kbd; $('vol').value = st.vol; $('zoom').value = st.scale;
+  $('cCont').checked = st.cont; $('cScroll').checked = st.scroll; $('cKbd').checked = st.kbd; $('cNum').checked = st.cnum !== false; $('vol').value = st.vol; $('zoom').value = st.scale;
   $('cMidiSound').checked = st.midiSound; $('selCount').value = String(st.countIn || 1);
   document.body.classList.toggle('nokbd', !st.kbd);
   updateHandDim();
@@ -2182,6 +2199,7 @@ function initUI() {
   $('cLoop').onchange = (e) => { S.settings.loop = e.target.checked; saveSettings(); };
   $('cCont').onchange = (e) => { S.settings.cont = e.target.checked; saveSettings(); };
   $('cScroll').onchange = (e) => { S.settings.scroll = e.target.checked; saveSettings(); };
+  $('cNum').onchange = (e) => { S.settings.cnum = e.target.checked; if (!e.target.checked) setCNum(null); saveSettings(); };
   $('cKbd').onchange = (e) => { S.settings.kbd = e.target.checked; document.body.classList.toggle('nokbd', !e.target.checked); saveSettings(); rerender(); };
   $('selCount').onchange = (e) => { S.settings.countIn = +e.target.value; saveSettings(); if (P.playing) stopPlay(true); buildTimeline(); computeSystemGeometry(); };
   $('cMidiSound').onchange = (e) => { S.settings.midiSound = e.target.checked; saveSettings(); };
@@ -2252,7 +2270,7 @@ async function rerender() {
 
 async function main() {
   const initHash = location.hash;   // 每首曲子的链接（#pop=… / #z=…），在生成乐谱改写网址之前先记下
-  cursor.el = $('cursor'); cursor.badge = $('cbadge');
+  cursor.el = $('cursor'); cursor.badge = $('cbadge'); cursor.num = $('cnum');
   // MIDI 状态：设置面板里始终显示一行，方便在 iPhone 等设备上确认浏览器到底有没有提供 Web MIDI
   const coarse = window.matchMedia && matchMedia('(pointer:coarse)').matches;
   const midiInfo = () => {

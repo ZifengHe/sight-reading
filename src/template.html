@@ -112,6 +112,7 @@ body.nomidi .midi{display:none!important}
 .k.play{background:var(--accent)!important}
 .k.user{background:var(--accent2)!important}
 .k.bad{background:var(--bad)!important}
+#cnum{position:absolute;left:-4px;bottom:-2px;width:26px;height:20px;border-radius:10px;background:rgba(47,111,222,.92);color:#fff;font-weight:700;font-size:14px;line-height:20px;text-align:center;display:none;font-variant-numeric:tabular-nums}
 #loading{position:fixed;inset:0;background:rgba(239,233,220,.92);z-index:100;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;font-size:16px;color:#5a5245}
 #loading.show{display:flex}
 #loadTrack{width:280px;height:8px;border-radius:4px;background:#ddd3bf;overflow:hidden}
@@ -208,6 +209,7 @@ body.nomidi .midi{display:none!important}
       <label><input type="checkbox" id="cScroll" checked> 换曲自动翻页</label>
       <label>预备拍 <select id="selCount"><option value="1">1 小节</option><option value="2">2 小节</option><option value="3">3 小节</option></select></label>
       <label><input type="checkbox" id="cKbd" checked> 屏幕键盘</label>
+      <label><input type="checkbox" id="cNum" checked> 光标下的拍点数字</label>
       <label>音量 <input type="range" id="vol" min="0" max="100" value="80"></label>
       <label>谱面大小 <input type="range" id="zoom" min="50" max="100" step="5" value="100"></label>
       <button id="bNew">🎲 换一套新谱</button>
@@ -252,7 +254,7 @@ body.nomidi .midi{display:none!important}
     </div>
   </div>
 </header>
-<div id="main"><main id="wrap"><div id="score"><div id="cursor"><div id="cbadge"></div></div></div></main>
+<div id="main"><main id="wrap"><div id="score"><div id="cursor"><div id="cbadge"></div><div id="cnum"></div></div></div></main>
 <div id="kbd"></div></div>
 <div id="loading"><div>正在谱写乐曲…</div><div id="loadTrack"><div id="loadBar"></div></div></div>
 <div id="toast"></div>
@@ -273,6 +275,7 @@ body.nomidi .midi{display:none!important}
   <ul>
     <li><b>速度</b>：按每首推荐速度的百分比调整。<kbd>↑</kbd><kbd>↓</kbd> 每次 ±5%。</li>
     <li><b>声音</b>：“全部播放”=先听一遍再弹；“只播我不弹的手”=分手练习时让电脑弹另一只手；“只播我弹的手”=电脑给你练的这只手做示范；“静音”=完全自己弹，只跟光标。</li>
+    <li><b>光标下的拍点数字</b>：播放时光标底部的蓝色数字每小节从 0 数起，一个八分音符加 1（4/4 拍是 0–7），节奏均匀，可以用它数拍子。不想看可以在设置里关掉。</li>
     <li><b>循环本曲</b>：同一首反复练（第二遍以后就不算视奏了，适合难点）。</li>
     <li><b>点击谱面任意小节</b>即可从那里开始。</li>
   </ul>

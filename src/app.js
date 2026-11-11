@@ -846,7 +846,7 @@ function validatePiece(pc) {
 const S = {
   seed: 0, exs: [], levelStart: [], ev: [], bars: [], systems: [],
   cur: { ex: 0, bar: 0 },
-  settings: { speed: 100, metro: false, sound: 'all', hand: 'both', loop: false, cont: true, scroll: true, kbd: true, vol: 80, scale: 100, follow: false, midiSound: false, countIn: 1 },
+  settings: { speed: 100, metro: false, sound: 'all', hand: 'both', loop: false, cont: true, scroll: true, kbd: true, vol: 80, scale: 100, follow: false, midiSound: false, countIn: 1, cnum: true },
 };
 // 一行谱的逻辑宽度预算：触屏设备按横屏的长边计算，保证横屏时音符不会太小
 function lineBudget() {
@@ -1218,6 +1218,9 @@ function renderExercise(ex, div, cw, pageH, nLines, li) {
       if (!pts.has(0)) pts.set(0, sx + 12);
       const anchors = [...pts.entries()].sort((a, b) => a[0] - b[0]);
       anchors.push([bar.len, x + w - 6]);
+      // 同一行里，上一小节的终点接到这一小节第一个音上：光标在最后一个音的时值里匀速越过小节线，不在小节线处跳
+      if (ancPrev && ancPrev.sys === S.systems.length && ancPrev.ex === ex) ancPrev.a[ancPrev.a.length - 1][1] = anchors[0][1];
+      ancPrev = { a: anchors, sys: S.systems.length, ex };
       bar.anchors = anchors; bar.sysIdx = S.systems.length; bar.x0 = x; bar.x1 = x + w;
       x += w;
       bar.vf = null; // 释放
@@ -1492,6 +1495,14 @@ function clearHighlights() {
 
 /* ---- 光标与滚动 ---- */
 const cursor = { el: null, badge: null, x: 0, y: 0, h: 0, tx: 0, ty: 0 };
+let ancPrev = null;
+// 光标下面的拍点数字：每小节从 0 数起，一个八分音符加 1（4/4 是 0–7），给眼睛一个均匀的节奏参照
+function setCNum(tick, len) {
+  const el = cursor.num; if (!el) return;
+  if (tick == null || !S.settings.cnum) { if (cursor.numTxt !== '') { el.style.display = 'none'; cursor.numTxt = ''; } return; }
+  const n = String(clamp(Math.floor(tick / 12 + 1e-6), 0, Math.max(0, Math.ceil(len / 12 - 1e-6) - 1)));
+  if (cursor.numTxt !== n) { el.textContent = n; el.style.display = 'block'; cursor.numTxt = n; }
+}
 function cursorXForBar(bar, tick) {
   const a = bar.anchors; if (!a) return 0;
   for (let i = 0; i < a.length - 1; i++) {
@@ -1520,6 +1531,7 @@ function placeIdleCursor() {
   const bar = ex.bars[S.cur.bar];
   if (bar.sysIdx === undefined) return;
   setCursor(bar.sysIdx, bar.anchors[0][1], true);
+  setCNum(null);
   updateStatus(bar);
 }
 // 翻页：把某首练习整屏显示（播放中不滚动，只在换曲时翻页）
@@ -1558,6 +1570,7 @@ function frame() {
         const x = inCount ? bar.anchors[0][1] : cursorXForBar(bar, (t - bar.t0) / spt(ex));
         if (S.settings.scroll && bar.ex !== P.shownEx) flipTo(bar.ex);
         setCursor(bar.sysIdx, x, false);
+        setCNum(inCount ? null : (t - bar.t0) / spt(ex), bar.len);
         // 预备拍倒数：还剩几拍
         if (inCount) {
           const beatDur = ex.ts.beat * spt(ex);
@@ -1768,6 +1781,7 @@ function followFrame(dt) {
   FOL.x = cursor.sys === bar.sysIdx ? lerp(FOL.x, x, Math.min(1, dt * 14)) : x;
   if (S.settings.scroll && bar.ex !== P.shownEx) flipTo(bar.ex);
   setCursor(bar.sysIdx, FOL.x, false);
+  setCNum(o.pos, bar.len);
   cursor.badge.style.display = 'none';
 }
 
@@ -1824,7 +1838,7 @@ function loadSettings() {
 function applySettingsToUI() {
   const st = S.settings;
   $('cMetro').checked = st.metro; $('selSound').value = st.sound; $('selHand').value = st.hand; $('cLoop').checked = st.loop;
-  $('cCont').checked = st.cont; $('cScroll').checked = st.scroll; $('cKbd').checked = st.kbd; $('vol').value = st.vol; $('zoom').value = st.scale;
+  $('cCont').checked = st.cont; $('cScroll').checked = st.scroll; $('cKbd').checked = st.kbd; $('cNum').checked = st.cnum !== false; $('vol').value = st.vol; $('zoom').value = st.scale;
   $('cMidiSound').checked = st.midiSound; $('selCount').value = String(st.countIn || 1);
   document.body.classList.toggle('nokbd', !st.kbd);
   updateHandDim();
@@ -1865,6 +1879,7 @@ function initUI() {
   $('cLoop').onchange = (e) => { S.settings.loop = e.target.checked; saveSettings(); };
   $('cCont').onchange = (e) => { S.settings.cont = e.target.checked; saveSettings(); };
   $('cScroll').onchange = (e) => { S.settings.scroll = e.target.checked; saveSettings(); };
+  $('cNum').onchange = (e) => { S.settings.cnum = e.target.checked; if (!e.target.checked) setCNum(null); saveSettings(); };
   $('cKbd').onchange = (e) => { S.settings.kbd = e.target.checked; document.body.classList.toggle('nokbd', !e.target.checked); saveSettings(); rerender(); };
   $('selCount').onchange = (e) => { S.settings.countIn = +e.target.value; saveSettings(); if (P.playing) stopPlay(true); buildTimeline(); computeSystemGeometry(); };
   $('cMidiSound').onchange = (e) => { S.settings.midiSound = e.target.checked; saveSettings(); };
@@ -1935,7 +1950,7 @@ async function rerender() {
 
 async function main() {
   const initHash = location.hash;   // 每首曲子的链接（#pop=… / #z=…），在生成乐谱改写网址之前先记下
-  cursor.el = $('cursor'); cursor.badge = $('cbadge');
+  cursor.el = $('cursor'); cursor.badge = $('cbadge'); cursor.num = $('cnum');
   // MIDI 状态：设置面板里始终显示一行，方便在 iPhone 等设备上确认浏览器到底有没有提供 Web MIDI
   const coarse = window.matchMedia && matchMedia('(pointer:coarse)').matches;
   const midiInfo = () => {
