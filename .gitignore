@@ -1,1 +1,6 @@
 __pycache__/
+# 私人曲谱（版权）不进仓库
+*.pdf
+private/
+*.musicxml
+*.mxl

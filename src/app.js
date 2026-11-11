@@ -984,7 +984,8 @@ function buildBarVF(ex, bar) {
       for (const [key, g] of Object.entries(tg)) {
         if (!key.startsWith(vi + ':')) continue;
         const t0 = g[0];
-        if (t0.tupN) tuplets.push(new VF.Tuplet(g.map((e) => e.sn), { num_notes: t0.tupN, notes_occupied: t0.tupM, ratioed: false }));
+        // 导入的曲谱：右手的连音数字写在谱表上方、左手写在下方，免得两手的数字挤在两行谱表之间重叠
+        if (t0.tupN) { const tp = new VF.Tuplet(g.map((e) => e.sn), { num_notes: t0.tupN, notes_occupied: t0.tupM, ratioed: false, location: hand === 'rh' ? VF.Tuplet.LOCATION_TOP : VF.Tuplet.LOCATION_BOTTOM }); tp._imp = hand; tuplets.push(tp); }
         else if (g.length === 3) tuplets.push(new VF.Tuplet(g.map((e) => e.sn), { num_notes: 3, notes_occupied: 2, bracketed: false, ratioed: false }));
       }
       const voice = new VF.Voice({ num_beats: ts.n, beat_value: ts.d }).setMode(VF.Voice.Mode.SOFT).addTickables(tick);
@@ -993,6 +994,16 @@ function buildBarVF(ex, bar) {
       const opt = { groups: [ts.comp ? new VF.Fraction(3, 8) : new VF.Fraction(1, 4)] };
       if (multi) opt.maintain_stem_directions = true;
       try { beams.push(...VF.Beam.generateBeams(vnotes, opt)); } catch (er) { }
+      // 连好符杠后再决定括号：数字正好在符杠那一侧就不要括号，否则加括号标出是哪几个音
+      for (const tp of tuplets) {
+        if (!tp._imp || tp._bk) continue; tp._bk = 1;
+        const ns = tp.getNotes ? tp.getNotes() : tp.notes;
+        const beamed = ns.every((n) => n.hasBeam && n.hasBeam());
+        const side = ns[0].getStemDirection() === 1 ? VF.Tuplet.LOCATION_TOP : VF.Tuplet.LOCATION_BOTTOM;
+        const want = tp._imp === 'rh' ? VF.Tuplet.LOCATION_TOP : VF.Tuplet.LOCATION_BOTTOM;
+        tp.setTupletLocation(want);   // 连符杠时 VexFlow 会把位置改回符杠一侧，这里再设回来
+        tp.setBracketed(!(beamed && side === want));
+      }
     });
     // 修饰：跳音、重音、力度、指法（在符干方向确定后）
     for (const e of evs) {
@@ -1103,8 +1114,14 @@ function lineGeom(ex, ln) {
     b.lh.forEach((e) => e.notes.forEach((n) => { lhMax = Math.max(lhMax, n.d + offL); lhMin = Math.min(lhMin, n.d + offL); }));
   });
   // VexFlow 的第一线在 y+40；按实际音域留出上下空间
-  const above = Math.max(22, (rhMax - 38) * 5 + 20);
-  const below = Math.max(18, (18 - lhMin) * 5 + 20);
+  let above = Math.max(22, (rhMax - 38) * 5 + 20);
+  let below = Math.max(18, (18 - lhMin) * 5 + 20);
+  // 导入的曲谱：右手连音数字写在上方、左手写在下方，要多留出位置，免得和上下两行挤在一起
+  if (ex.learn) {
+    const has = (h) => ln.some((i) => ex.bars[i][h].some((e) => e.tupN));
+    if (has('rh')) above += 26;
+    if (has('lh')) below += 28;
+  }
   const gap = Math.min(150, 44 + Math.max(0, 30 - rhMin) * 5 + Math.max(0, lhMax - 26) * 5 + (dyn ? 16 : 0));
   const trebleY = above - 40, bassY = trebleY + 40 + gap;
   return { trebleY, bassY, H: above + 80 + gap + below };
