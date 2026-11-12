@@ -205,7 +205,7 @@ body.nomidi .midi{display:none!important}
       <label>声音 <select id="selSound"><option value="all">全部播放（听+看）</option><option value="others">只播我不弹的手</option><option value="mine">只播我弹的手（示范）</option><option value="none">静音（只跟光标）</option></select></label>
       <label>我弹 <select id="selHand"><option value="both">双手</option><option value="rh">右手</option><option value="lh">左手</option></select></label>
       <label><input type="checkbox" id="cLoop"> 循环本曲 (L)</label>
-      <label><input type="checkbox" id="cCont" checked> 自动接下一首</label>
+      <label><input type="checkbox" id="cCont" checked> 自动接下一首（正确率超过 88% 才进）</label>
       <label><input type="checkbox" id="cScroll" checked> 换曲自动翻页</label>
       <label>预备拍 <select id="selCount"><option value="1">1 小节</option><option value="2">2 小节</option><option value="3">3 小节</option></select></label>
       <label><input type="checkbox" id="cKbd" checked> 屏幕键盘</label>
@@ -262,7 +262,7 @@ body.nomidi .midi{display:none!important}
 <div id="help"><div class="card">
   <button class="close">关闭</button>
   <h2>怎么用它练视奏</h2>
-  <p>整页是一条连续的乐谱：从<b>入门</b>（中央C五指位置）开始，经过<b>一级到十级</b>，每级 58 首（共 638 首），难度一首一首往上加。每首练习单独占一屏（两行），弹的时候谱面不动，弹完自动翻到下一首。每次打开都会重新谱写一套<b>从没见过的新谱</b>（视奏要练的就是“第一次看到”）。“设置”里显示的“谱号”可以记下来：网址后面加 <code>#谱号</code>（例如 <code>sight_reading.html#2024</code>）就能找回同一套；点“换一套新谱”则重新谱写全部练习。</p>
+  <p>整页是一条连续的乐谱：从<b>入门</b>（中央C五指位置）开始，经过<b>一级到十级</b>，每级 98 首（共 1078 首），难度一首一首往上加。每首练习单独占一屏（两行），弹的时候谱面不动，弹完自动翻到下一首。每次打开都会重新谱写一套<b>从没见过的新谱</b>（视奏要练的就是“第一次看到”）。“设置”里显示的“谱号”可以记下来：网址后面加 <code>#谱号</code>（例如 <code>sight_reading.html#2024</code>）就能找回同一套；点“换一套新谱”则重新谱写全部练习。</p>
   <h3>进入心流的方法</h3>
   <ul>
     <li><b>选一个“刚好有点难”的级别</b>：能弹对 80%–90% 就是最合适的难度。太轻松就往后跳，太吃力就退一级或把速度调慢。</li>
@@ -282,7 +282,7 @@ body.nomidi .midi{display:none!important}
   <h3>连接电子琴 / MIDI 键盘（Chrome、Edge）</h3>
   <ul>
     <li>用 USB 连接后，点“⚙ 设置”里的“🎹 连接 MIDI 键盘”。连上后工具栏里会出现 🎹 状态（手机横屏在左侧按钮下方），按任意琴键会显示音名（例如 C4），说明琴已经接通。</li>
-    <li><b>按 ▶ 播放，跟着光标弹</b>：弹对的音符变<span style="color:var(--ok)">绿</span>，漏掉的变<span style="color:var(--bad)">红</span>；小窗里实时显示 ✓弹对 ✗漏掉 错=多弹的音。每首结束会弹出这首的正确率。不按播放时弹琴不会评分。</li>
+    <li><b>按 ▶ 播放，跟着光标弹</b>：弹对的音符变<span style="color:var(--ok)">绿</span>，漏掉的变<span style="color:var(--bad)">红</span>；小窗里实时显示 ✓弹对 ✗漏掉 错=多弹的音。每首结束会弹出这首的正确率。打开“自动接下一首”时，正确率超过 88% 才进下一首，否则这一首从预备拍重新来一遍（没接 MIDI 键盘时没有评分，照旧直接接下一首）。不按播放时弹琴不会评分。</li>
     <li><b>等待模式</b>：光标停在每个音上，弹对了才往前走，适合刚开始练某一级的时候。</li>
   </ul>
   <h3>iPhone / iPad（横屏）</h3>

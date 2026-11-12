@@ -276,7 +276,8 @@ const LEVELS = [
     keys: Object.keys(KEY_DEFS), newKeys: [], heavyKeys: true, times: ['4/4', '3/4', '2/4', '6/8', '12/8'], tier: 7, chordTier: 2, tempo: [80, 138], rh: [24, 46], lh: [9, 29], maxLeap: 7,
     lhPat: { arp16: 1.8, alberti16: 1.2, bassLine: 2, stride: 1.5, brokenOct: 1.5, triplet: 1.5, octaves: 1.2, arp8: 1 }, bars: 8, dyn: true, stacc: 0.2, accent: true, chrom: 0.3, split: 0.55, sec: 0.55, borrow: 0.35, swap: 0.35, tex: { thirds: 0.2, chordal: 0.3, octaves: 0.22 }, chordNotes: 3 },
 ];
-const EX_PER_LEVEL = 58;
+const EX_PER_LEVEL = 98;
+const PASS_PCT = 88;   // “自动接下一首”：这一首的正确率要大于它才进下一首，否则重弹这一首
 const ONSET_RATE = [0.9, 1.2, 1.5, 1.9, 2.3, 2.7, 3.1, 3.5, 4.0, 4.5, 5.1];   // 各级目标：每秒起音数
 const BUSY = { arp16: 2, alberti16: 2, brokenOct: 1, alberti: 1, broken: 1, arp8: 1, triplet: 1, bassLine: 1 };
 const COMPAT = { triplet: ['4/4', '3/4', '2/4'], arp16: ['4/4', '3/4', '2/4', '6/8'], alberti16: ['4/4', '3/4', '2/4', '6/8'] };
@@ -1385,7 +1386,7 @@ async function startPlay() {
   if (LM.active) return learnStartPlay();
   const { ex: exI, bar: bI } = S.cur;
   const ex = S.exs[exI];
-  P.curEx = exI; P.visEx = exI; P.stopAt = null; P.vq = []; clearHighlights();
+  P.curEx = exI; P.visEx = exI; P.stopAt = null; P.hold = null; P.pendingReset = null; P.vq = []; clearHighlights();
   if (S.settings.scroll) flipTo(exI);
   resetScore(exI, ex.bars[bI].t0);
   if (S.settings.follow && MIDI.connected) return startFollow();
@@ -1435,8 +1436,26 @@ function schedule() {
         P.pendingReset = { at, ex: ex.gi };
         continue;
       }
-      if (!S.settings.cont || P.curEx === S.exs.length - 1) { if (P.stopAt === null) P.stopAt = ctxTimeOf(ex.endT0) + 0.3; return; }
-      P.curEx++;
+      if (!S.settings.cont) { if (P.stopAt === null) P.stopAt = ctxTimeOf(ex.endT0) + 0.3; return; }
+      if (P.stopAt !== null) return;
+      const last = P.curEx === S.exs.length - 1;
+      if (exPct(ex.gi) === null) {   // 没有评分（没接 MIDI 键盘）：照旧直接接下一首
+        if (last) { P.stopAt = ctxTimeOf(ex.endT0) + 0.3; return; }
+        P.curEx++;
+        continue;
+      }
+      // 有评分：等这一首真正弹完再看正确率，光标先停在末尾
+      const at = ctxTimeOf(ex.endT0);
+      if (AU.ctx.currentTime < at) { P.hold = { t0: ex.endT0, until: Infinity }; return; }
+      const pass = exPct(ex.gi) > PASS_PCT;
+      if (pass && last) { P.stopAt = AU.ctx.currentTime + 0.3; return; }
+      const c = AU.ctx.currentTime + 0.06;
+      P.hold = { t0: ex.endT0, until: c };
+      const f = P.anchors[P.anchors.length - 1].f;
+      if (pass) { P.anchors.push({ ctx: c, t0: ex.endT0, f }); P.curEx++; continue; }
+      P.anchors.push({ ctx: c, t0: ex.countInStart, f });
+      P.nextIdx = lowerBound(S.ev, ex.countInStart);
+      P.pendingReset = { at: c, ex: ex.gi, again: true };
       continue;
     }
     const tc = ctxTimeOf(e.t0);
@@ -1557,9 +1576,10 @@ function frame() {
     P.vq = P.vq.filter((v) => { if (v.started && v.off <= now) { hl(v.el, false); keyHl(v.midi, false); return false; } return true; });
     if (P.mode === 'play') {
       while (P.anchors.length > 1 && P.anchors[1].ctx <= now) P.anchors.shift();
-      if (P.pendingReset && now >= P.pendingReset.at) { showScore(P.pendingReset.ex); resetScore(P.pendingReset.ex); P.pendingReset = null; }
+      if (P.pendingReset && now >= P.pendingReset.at) { showScore(P.pendingReset.ex, P.pendingReset.again); resetScore(P.pendingReset.ex); P.pendingReset = null; }
       if (P.pendingPass && now >= P.pendingPass.at) { const pp = P.pendingPass; P.pendingPass = null; if (P.pendingCountIn) { P.countIn = P.pendingCountIn; P.pendingCountIn = null; } learnPassEnd(pp); if (!P.playing) return requestAnimationFrame(frame); }
-      const t = posT0(now);
+      let t = posT0(now);
+      if (P.hold) { if (now >= P.hold.until) P.hold = null; else t = Math.min(t, P.hold.t0 - 1e-4); }
       if (P.countIn && t >= P.countIn.to) P.countIn = null;
       // 开始后的头 0.12 秒 t 还在起点之前，会落到上一首的最后一小节，这里按起点算
       const bar = P.countIn && t < P.countIn.to ? P.countIn.bar : locateBar(Math.max(t, (P.startT0 ?? -Infinity) + 1e-6));
@@ -1670,7 +1690,13 @@ function updateLiveScore() {
   const sc = SC[scKey()]; if (!sc) return;
   hud();
 }
-function showScore(gi) {
+// 这一首的正确率（取整，和显示的一样）；没有评分时返回 null
+function exPct(gi) {
+  const sc = SC[gi];
+  if (LM.active || !MIDI.connected || !sc || !sc.exp.length) return null;
+  return Math.round((100 * sc.hit) / sc.exp.length);
+}
+function showScore(gi, again) {
   if (LM.active) return;
   const sc = SC[gi]; if (!sc || !MIDI.connected) return;
   const tot = sc.exp.length; if (!tot) return;
@@ -1681,7 +1707,7 @@ function showScore(gi) {
   const ex = S.exs[gi];
   const name = ex ? `${ex.li === 0 ? '入门' : LEVELS[ex.li].name} 练习 ${ex.ei + 1}` : '上一首';
   HUD.last = `${name}：${pct}%`;
-  toast(`${name}：正确率 ${pct}%（弹对 ${sc.hit}/${tot}，错音 ${sc.wrong}）`);
+  toast(`${name}：正确率 ${pct}%（弹对 ${sc.hit}/${tot}，错音 ${sc.wrong}）` + (again ? `，没超过 ${PASS_PCT}%，再弹一遍` : ''));
   hud();
 }
 async function connectMidi() {
@@ -1727,13 +1753,17 @@ function prepFollow() {
   if (FOL.timer) { clearTimeout(FOL.timer); FOL.timer = null; }
   const o = S.ons[FOL.idx];
   if (!o && LM.active) { learnFollowPassEnd(); return; }
+  if (!o && !LM.active && !S.settings.loop && S.settings.cont && exPct(P.curEx) !== null && !(exPct(P.curEx) > PASS_PCT)) {   // 最后一首没过关：也重弹
+    showScore(P.curEx, true); FOL.idx = lowerBound(S.ons, S.exs[P.curEx].startT0); resetScore(P.curEx); return prepFollow();
+  }
   if (!o) { stopPlay(false); return; }
   ensureRendered(o.ex);
   if (LM.active && (o.t0 >= LM.endT0 - 1e-6 || !o)) { learnFollowPassEnd(); return; }
   if (LM.active && o.ex !== P.curEx) P.curEx = o.ex;
   if (o.ex !== P.curEx) {
-    showScore(P.curEx);
-    if (S.settings.loop) { const ex = S.exs[P.curEx]; FOL.idx = lowerBound(S.ons, ex.startT0); resetScore(P.curEx); return prepFollow(); }
+    const again = !S.settings.loop && S.settings.cont && exPct(P.curEx) !== null && !(exPct(P.curEx) > PASS_PCT);
+    showScore(P.curEx, again);
+    if (S.settings.loop || again) { const ex = S.exs[P.curEx]; FOL.idx = lowerBound(S.ons, ex.startT0); resetScore(P.curEx); return prepFollow(); }
     if (!S.settings.cont) { S.cur = { ex: o.ex, bar: 0 }; stopPlay(false); return; }
     P.curEx = o.ex; resetScore(o.ex);
   }
