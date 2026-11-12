@@ -51,6 +51,10 @@ td{font-variant-numeric:tabular-nums}
 #exprV{font-weight:700;font-size:16px;margin:0 0 4px}
 ul.good li{margin-bottom:6px}
 @media (max-width:520px){.ebar{grid-template-columns:5.5em 60px 1fr}}
+.hstave{overflow-x:auto;margin:8px 0 2px;background:var(--paper)}
+.hstave svg{display:block}
+.hcap{font-size:13px;color:var(--muted);margin:0 0 10px}
+.hcap b{color:var(--bad)}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -76,9 +80,11 @@ ul.good li{margin-bottom:6px}
     <div id="rollBox"><canvas id="roll"></canvas></div>
     <div class="legend">横向是时间，纵向是音高，颜色越深按得越重。<i style="background:var(--bad)"></i>卡顿<i style="background:var(--warn)"></i>抢拍<i style="background:#8e5bd0"></i>蹭到的音。上方蓝线是速度，绿线是旋律的强弱起伏。</div>
   </div>
+  <p class="caveat">五线谱只画了你弹的音高和先后顺序（不画时值），调号是按你弹的音猜的。</p>
   <p class="caveat">说明：这里没有乐谱，所以判断不了音弹得对不对，只能从你实际弹出来的时间、力度、时值里找问题。自由速度（rubato）的音乐会被当成"不稳"，这种情况请忽略节奏方面的建议。</p>
 </div>
 </main>
+<script src="src/vendor/vexflow-4.2.2.js"></script>
 <script>
 'use strict';
 const $ = (id) => document.getElementById(id);
@@ -188,22 +194,30 @@ function analyze(notes, pedal) {
   const usable = iois.filter((x) => x > 0.08 && x < 2.5);
   if (usable.length >= 12) {
     const p0 = findPulse(usable); let cur = p0;
-    const devs = [], hes = [], rush = [], breaks = [];
+    let devs = [], hes = [], rush = [], breaks = [], kc = new Map(), allowed = KS.map((x) => x[0]);
+    // 算两遍：第一遍数出这段音乐里常用哪几种时值；第二遍只认常用的时值——
+    // 落在很少出现的时值上的间隔（比如全曲都是八分、四分，突然冒出一个"附点"）多半是卡了一下，而不是节奏
+    for (let pass = 0; pass < 2; pass++) {
+    if (pass) { const tot = [...kc.values()].reduce((a, b) => a + b, 0); const al = KS.map((x) => x[0]).filter((k) => (kc.get(k) || 0) / tot >= 0.04); if (al.length) allowed = al; cur = p0; devs = []; hes = []; rush = []; breaks = []; A.tempo = []; }
     for (let i = 1; i < cl.length; i++) {
       const x = cl[i].t - cl[i - 1].t;
       if (x < 0.08) continue;
       if (x > Math.max(2, 4.2 * cur)) { breaks.push({ t: cl[i - 1].t, len: x }); continue; }
-      let bk = 1, be = 9;
-      for (const [k] of KS) { const e = Math.abs(Math.log(x / (k * cur))); if (e < be) { be = e; bk = k; } }
-      const e = x / (bk * cur) - 1;
+      let bk = allowed[0], be = 9;
+      for (const k of allowed) { const e = Math.abs(Math.log(x / (k * cur))); if (e < be) { be = e; bk = k; } }
+      let e = x / (bk * cur) - 1;
+      if (!pass) kc.set(bk, (kc.get(bk) || 0) + 1);
+      // 比最近的常用时值早了很多：更可能是在前一档时值上卡住了
+      if (e < -0.25) { const lower = allowed.filter((k) => k * cur < x); if (lower.length) { bk = Math.max(...lower); e = x / (bk * cur) - 1; } }
       const off = Math.abs(x - bk * cur) >= 0.045;   // 差不到 0.045 秒的听不出来，不算
       // 后面紧跟着一个停顿：这是句尾放慢，不算卡顿
       const phraseEnd = i + 1 < cl.length && cl[i + 1].t - cl[i].t > Math.max(0.7, 2 * cur);
       if (e >= 0.12 && off && phraseEnd) A.tempo.push({ t: cl[i].t, bpm: 60 / cur });
-      else if (e >= 0.12 && off) hes.push({ t: cl[i].t, extra: x - bk * cur, e });
+      else if (e >= 0.12 && off) hes.push({ t: cl[i].t, extra: x - bk * cur, e, i, beats: (x - bk * cur) / cur });
       else if (e <= -0.12 && off) rush.push({ t: cl[i].t, e });
       else { devs.push(e); cur = cur * (1 - 0.15 * Math.min(1, bk)) + (x / bk) * 0.15 * Math.min(1, bk); }
       A.tempo.push({ t: cl[i].t, bpm: 60 / cur });
+    }
     }
     const bpm = median(A.tempo.map((x) => x.bpm));
     const rms = Math.sqrt(mean(devs.map((e) => e * e))) * 100;
@@ -219,9 +233,10 @@ function analyze(notes, pedal) {
     hes.forEach((h) => A.marks.push({ t: h.t, c: 'bad' })); rush.forEach((h) => A.marks.push({ t: h.t, c: 'warn' }));
     const hesRate = hes.length / Math.max(0.25, mins);
     if (hes.length >= 3 && hesRate >= 2) {
-      const top = hes.slice(0, 6).sort((a, b) => a.t - b.t).map((h) => mmss(h.t) + '（多等了 ' + h.extra.toFixed(2) + ' 秒）').join('、');
-      A.adv.push({ sev: 60 + Math.min(40, hesRate * 3), t: '有 ' + hes.length + ' 处卡顿：下一个音来晚了', d: '最明显的几处在 ' + top + '。卡顿通常说明那里的音或指法还没想清楚，手在等脑子。',
-        how: '练法：对照下面的图找到这几处，每处只取前后各两拍，用现在一半的速度连续弹对 5 遍再放回去。整段练的时候把速度降到这几处也不用停的程度。' });
+      const top = hes.slice(0, 6).sort((a, b) => a.t - b.t);
+      A.adv.push({ sev: 60 + Math.min(40, hesRate * 3), t: '有 ' + hes.length + ' 处卡顿：下一个音来晚了', d: '最明显的 ' + top.length + ' 处标在下面的五线谱上：红色的音就是来晚的那个音。卡顿通常说明那里的音或指法还没想清楚，手在等脑子。',
+        how: '练法：每处只取红色音前后各两拍，用现在一半的速度连续弹对 5 遍再放回去。整段练的时候把速度降到这几处也不用停的程度。', staves: top.map((h) => ({ i: h.i, beats: h.beats })), cl,
+        fallback: '位置：' + top.map((h) => mmss(h.t)).join('、') });
     } else if (hes.length <= 1 && devs.length >= 20) A.good.push('几乎没有卡顿（' + hes.length + ' 处），说明这段已经弹熟了。');
     if (rush.length >= 3 && rush.length / Math.max(0.25, mins) >= 2) {
       const top = rush.slice().sort((a, b) => a.e - b.e).slice(0, 6).sort((a, b) => a.t - b.t).map((h) => mmss(h.t)).join('、');
@@ -327,6 +342,58 @@ function analyze(notes, pedal) {
   return A;
 }
 
+/* ---------- 把卡顿的地方画成五线谱 ---------- */
+const KEYN = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'], LET = 'CDEFGAB', LPC = [0, 2, 4, 5, 7, 9, 11], MAJ = [0, 2, 4, 5, 7, 9, 11];
+// 按弹得最多的音猜一个调（当成大调），用来决定调号和升降号怎么写
+function guessKey(notes) {
+  const h = new Array(12).fill(0); notes.forEach((n) => (h[n.m % 12] += Math.min(1, n.d)));
+  let best = 0, bs = -1;
+  for (let k = 0; k < 12; k++) { let sc = 0; MAJ.forEach((d) => (sc += h[(k + d) % 12])); sc += 0.5 * h[k] + 0.25 * h[(k + 7) % 12]; if (sc > bs + 1e-9) { bs = sc; best = k; } }
+  const tl = LET.indexOf(KEYN[best][0]), alt = {}, spell = {};
+  MAJ.forEach((d, i) => { const li = (tl + i) % 7, pc = (best + d) % 12; let a = pc - LPC[li]; if (a > 6) a -= 12; if (a < -6) a += 12; alt[li] = a; spell[pc] = [li, a]; });
+  const flat = [5, 10, 3, 8, 1].includes(best);
+  for (let pc = 0; pc < 12; pc++) if (!spell[pc]) { if (LPC.includes(pc)) { spell[pc] = [LPC.indexOf(pc), 0]; continue; } const li = flat ? LPC.findIndex((x) => x === (pc + 1) % 12) : LPC.findIndex((x) => x === (pc + 11) % 12); spell[pc] = li >= 0 ? [li, flat ? -1 : 1] : [LPC.indexOf(pc), 0]; }
+  return { name: KEYN[best], alt, spell };
+}
+function drawHes(box, cl, h, key, no) {
+  const VF = Vex.Flow, cs = getComputedStyle(document.documentElement), ink = cs.getPropertyValue('--ink').trim(), red = cs.getPropertyValue('--bad').trim();
+  const a = Math.max(0, h.i - 5), b = Math.min(cl.length, h.i + 3), n = b - a, step = 44, gapW = 34;
+  const wrap = document.createElement('div'); wrap.className = 'hstave'; box.appendChild(wrap);
+  const ksW = 40 + 11 * Object.values(key.alt).filter(Boolean).length, W = 30 + ksW + n * step + gapW + 24, H = 226;
+  const r = new VF.Renderer(wrap, VF.Renderer.Backends.SVG); r.resize(W, H);
+  const ctx = r.getContext(); ctx.setFillStyle(ink); ctx.setStrokeStyle(ink);
+  const tr = new VF.Stave(24, 26, W - 30).addClef('treble').addKeySignature(key.name), bs = new VF.Stave(24, 116, W - 30).addClef('bass').addKeySignature(key.name);
+  tr.setContext(ctx).draw(); bs.setContext(ctx).draw();
+  new VF.StaveConnector(tr, bs).setType(VF.StaveConnector.type.BRACE).setContext(ctx).draw();
+  new VF.StaveConnector(tr, bs).setType(VF.StaveConnector.type.SINGLE_LEFT).setContext(ctx).draw();
+  const svg = wrap.querySelector('svg'), NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, at, txt) => { const e = document.createElementNS(NS, tag); for (const k in at) e.setAttribute(k, at[k]); if (txt != null) e.textContent = txt; svg.appendChild(e); return e; };
+  const x0 = Math.max(tr.getNoteStartX(), bs.getNoteStartX()) + 16, trB = tr.getYForLine(4), bsB = bs.getYForLine(4);
+  for (let k = a; k < b; k++) {
+    const late = k === h.i, x = x0 + (k - a) * step + (k >= h.i ? gapW : 0), colr = late ? red : ink;
+    if (late) {
+      const gx = x - (step + gapW) / 2 + 4;
+      el('line', { x1: gx, x2: gx, y1: tr.getYForLine(0) - 8, y2: bsB + 8, stroke: red, 'stroke-width': 2, 'stroke-dasharray': '5 4' });
+      el('text', { x: gx, y: tr.getYForLine(0) - 13, fill: red, 'font-size': 13, 'font-weight': 700, 'text-anchor': 'middle', 'font-family': 'sans-serif' }, '卡在这里');
+    }
+    let prevP = null, shifted = false;
+    for (const nt of cl[k].notes) {
+      const [li, al] = key.spell[nt.m % 12], nat = nt.m - al, p = (Math.floor(nat / 12) - 5) * 7 + li;   // 相对中央 C 隔几个音级
+      const treble = nt.m >= 60, y = treble ? trB - (p - 2) * 5 : bsB - (p + 10) * 5;
+      shifted = prevP != null && p - prevP === 1 && !shifted;   // 二度挨着：往右错开
+      const nx = x + (shifted ? 13 : 0); prevP = p;
+      const pos = treble ? p - 2 : p + 10;   // 相对本谱表最下面一条线（0）的位置，8 是最上面一条线
+      for (let q = -2; q >= pos; q -= 2) el('line', { x1: nx - 10, x2: nx + 10, y1: (treble ? trB : bsB) - q * 5, y2: (treble ? trB : bsB) - q * 5, stroke: colr, 'stroke-width': 1.2 });
+      for (let q = 10; q <= pos; q += 2) el('line', { x1: nx - 10, x2: nx + 10, y1: (treble ? trB : bsB) - q * 5, y2: (treble ? trB : bsB) - q * 5, stroke: colr, 'stroke-width': 1.2 });
+      el('ellipse', { cx: nx, cy: y, rx: 6.3, ry: 4.5, fill: colr, transform: 'rotate(-20 ' + nx + ' ' + y + ')' });
+      if (al !== (key.alt[li] || 0)) el('text', { x: nx - 17, y: y + 5, fill: colr, 'font-size': 15, 'text-anchor': 'middle', 'font-family': 'serif' }, al === 1 ? '♯' : al === -1 ? '♭' : '♮');
+    }
+  }
+  const cap = document.createElement('div'); cap.className = 'hcap';
+  cap.innerHTML = '第 ' + no + ' 处：<b>红色的音</b>来晚了约 ' + (h.beats < 0.2 ? h.beats.toFixed(2) : h.beats.toFixed(1)) + ' 拍。';
+  box.appendChild(cap);
+}
+
 /* ---------- 情绪表达 ---------- */
 function smooth(pts, sig) {   // 按时间做平滑：去掉一个音一个音的抖动，留下"成句"的起伏
   return pts.map((p) => { let s = 0, w = 0; for (const q of pts) { const d = (q.t - p.t) / sig; if (d < -3 || d > 3) continue; const g = Math.exp(-d * d / 2); s += g * q.v; w += g; } return s / w; });
@@ -395,8 +462,14 @@ function expression(A, notes, cl, dur, flatVel) {
 function esc(s) { return String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
 function show(A) {
   $('out').hidden = false;
-  $('adv').innerHTML = A.adv.length ? A.adv.slice(0, 5).map((x) => '<li><div class="t">' + esc(x.t) + '</div><div>' + esc(x.d) + '</div><div class="how">' + esc(x.how) + '</div></li>').join('')
+  $('adv').innerHTML = A.adv.length ? A.adv.slice(0, 5).map((x, k) => '<li><div class="t">' + esc(x.t) + '</div><div>' + esc(x.d) + '</div><div id="hs' + k + '"></div><div class="how">' + esc(x.how) + '</div></li>').join('')
     : '<li><div class="t">这次没有找到明显的问题</div><div>节奏、力度、整齐度都在正常范围内。可以把速度提一点，或者换更难的段落再录。</div></li>';
+  A.adv.slice(0, 5).forEach((x, k) => {
+    if (!x.staves) return;
+    const box = $('hs' + k), key = guessKey(A.notes);
+    try { x.staves.forEach((h, j) => drawHes(box, x.cl, h, key, j + 1)); }
+    catch (e) { box.innerHTML = '<div class="hcap">（五线谱画不出来：' + esc(e.message || e) + '）' + esc(x.fallback) + '</div>'; }
+  });
   const E = A.expr;
   $('exprV').textContent = E.none || (E.verdict + '（' + Math.round(E.total * 100) + ' / 100）') + (E.note ? '　' + E.note : '');
   $('exprBars').innerHTML = (E.bars || []).map((b) => '<div class="ebar"><span>' + esc(b.name) + '</span><div class="tr"><i class="' + (b.score < 0.4 ? 'lo' : b.score < 0.7 ? 'mid' : 'hi') + '" style="width:' + Math.max(4, Math.round(b.score * 100)) + '%"></i></div><span>' + esc(b.text) + '</span></div>').join('');
