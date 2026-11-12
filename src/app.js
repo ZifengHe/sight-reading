@@ -1419,6 +1419,7 @@ function stopPlay(keepPos = true) {
     if (b) S.cur = { ex: b.ex, bar: b.bi };
   }
   P.playing = false; clearInterval(P.timer); P.timer = null; P.countIn = null;
+  if (toast.sticky) { clearTimeout(toast._t); toast._t = setTimeout(toastUnstick, 10000); }
   if (FOL.timer) { clearTimeout(FOL.timer); FOL.timer = null; }
   AU.stopAll(); P.vq = []; clearHighlights();
   updatePlayBtn(); placeIdleCursor();
@@ -1620,7 +1621,20 @@ function frame() {
 }
 
 /* ======================= MIDI 输入、评分、跟随模式 ======================= */
-const MIDI = { connected: false, access: null, held: new Set() };
+const MIDI = { connected: false, access: null, held: new Set(), bound: new WeakSet(), seen: new WeakSet(), lastOn: new Map() };
+// 所有 MIDI 输入口共用的处理函数。同一下按键可能送来不止一次（两种挂法各送一次、键盘有两个端口、
+// 有的 iOS 实现每次给不同的事件对象）：同一个事件对象只认一次，同一个键 20 毫秒内的重复“按下”也只认一次。
+function midiHandle(msg) {
+  if (!msg || !msg.data) return;
+  if (typeof msg === 'object') { if (MIDI.seen.has(msg)) return; MIDI.seen.add(msg); }
+  const st = msg.data[0], d1 = msg.data[1], d2 = msg.data[2]; const cmd = st & 0xf0;
+  if (cmd === 0x90 && d2 > 0) {
+    const now = performance.now(), last = MIDI.lastOn.get(d1);
+    if (last !== undefined && now - last < 20) return;
+    MIDI.lastOn.set(d1, now);
+    onNoteOn(d1, d2);
+  } else if (cmd === 0x80 || (cmd === 0x90 && d2 === 0)) onNoteOff(d1);
+}
 const SC = {}; // 每首练习的分数
 function resetScore(gi, fromT0 = -1) {
   if (LM.active) return learnResetScore(fromT0);
@@ -1683,7 +1697,7 @@ function onNoteOn(m, vel) {
     const x = sc.exp[i]; if (!x.hit && x.midi === m) { found = x; break; }
   }
   if (found) {
-    found.hit = true; sc.hit++;
+    found.hit = true; sc.hit++; toastUnstick();
     found.e.hitN = (found.e.hitN || 0) + 1;
     if (found.e.el && found.e.hitN >= found.e.notes.length) { found.e.el.classList.remove('miss'); found.e.el.classList.add('hit'); }
   } else { sc.wrong++; const bs = barStat(sc, locateBar(t)); if (bs) bs.wrong++; }
@@ -1713,7 +1727,8 @@ function showScore(gi, again) {
   const ex = S.exs[gi];
   const name = ex ? `${ex.li === 0 ? '入门' : LEVELS[ex.li].name} 练习 ${ex.ei + 1}` : '上一首';
   HUD.last = `${name}：${pct}%`;
-  toast(`${name}：正确率 ${pct}%（弹对 ${sc.hit}/${tot}，错音 ${sc.wrong}）` + (again ? (pct < PASS_PCT ? `，没到 ${PASS_PCT}%` : `，有 ${sc.wrong} 个错键`) + '，再弹一遍' : ''));
+  toast(`${name}：正确率 ${pct}%（弹对 ${sc.hit}/${tot}，错音 ${sc.wrong}）` + (again ? (pct < PASS_PCT ? `，没到 ${PASS_PCT}%` : `，有 ${sc.wrong} 个错键`) + '，再弹一遍' : ''), true);
+  if (!P.playing) toast._t = setTimeout(toastUnstick, 10000);
   hud();
 }
 async function connectMidi() {
@@ -1726,15 +1741,9 @@ async function connectMidi() {
       acc.inputs.forEach((inp) => {
         n++;
         // 有些 iOS 上的 Web MIDI 实现只支持其中一种写法，两种都挂上；同一个事件对象只处理一次
-        const seen = new WeakSet();
-        const handle = (msg) => {
-          if (!msg || !msg.data) return;
-          if (typeof msg === 'object') { if (seen.has(msg)) return; seen.add(msg); }
-          const st = msg.data[0], d1 = msg.data[1], d2 = msg.data[2]; const cmd = st & 0xf0;
-          if (cmd === 0x90 && d2 > 0) onNoteOn(d1, d2); else if (cmd === 0x80 || (cmd === 0x90 && d2 === 0)) onNoteOff(d1);
-        };
-        inp.onmidimessage = handle;
-        if (inp.addEventListener) { try { inp.addEventListener('midimessage', handle); } catch (e) { } }
+        // 设备状态一变 bind 就会再跑一遍：每个输入口只挂一次，否则同一下按键会被处理好几遍（多出来的几遍都被记成错键）
+        inp.onmidimessage = midiHandle;
+        if (inp.addEventListener && !MIDI.bound.has(inp)) { MIDI.bound.add(inp); try { inp.addEventListener('midimessage', midiHandle); } catch (e) { } }
       });
       MIDI.connected = n > 0;
       document.getElementById('bMidi').textContent = n ? `🎹 已连接 ${n} 个 MIDI 设备` : '🎹 未发现 MIDI 设备（插上后重试）';
@@ -1797,7 +1806,7 @@ function playOthers(o) {
 function followNote(m) {
   const sc = SC[scKey()];
   if (FOL.need.has(m)) {
-    FOL.got.add(m);
+    FOL.got.add(m); toastUnstick();
     if ([...FOL.need].every((x) => FOL.got.has(x))) {
       const o = S.ons[FOL.idx];
       for (const e of o.evs) if (practiceHand(e.hand) && e.el) { e.el.classList.remove('expect'); e.el.classList.add('hit'); }
@@ -1838,7 +1847,13 @@ function buildKeyboard() {
 /* ======================= UI ======================= */
 function $(id) { return document.getElementById(id); }
 function escHtml(t) { return String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
-function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 3200); }
+function toast(msg, sticky) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t);
+  toast.sticky = !!sticky;
+  if (!sticky) toast._t = setTimeout(() => t.classList.remove('show'), 3200);
+}
+// 一首的成绩留在屏幕上，直到在下一首（或重弹的这一首）里弹对第一个音；没在播放时 10 秒后自己消失
+function toastUnstick() { if (!toast.sticky) return; toast.sticky = false; clearTimeout(toast._t); $('toast').classList.remove('show'); }
 function updatePlayBtn() { $('bPlay').innerHTML = P.playing ? '❚❚ 暂停' : '▶ 播放'; $('bPlay').classList.toggle('on', P.playing); hud(); }
 function updateSpeedLabel() {
   const ex = S.exs[P.playing ? P.curEx : S.cur.ex];

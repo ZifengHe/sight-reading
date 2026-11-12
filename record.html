@@ -108,6 +108,7 @@ function onMsg(ev) {
 function noteOn(m, v) {
   $('live').dataset.last = nn(m);
   if (!R.rec) { liveText(); return; }
+  { const o = R.open.get(m); if (o && now() - R.t0 - o.t < 0.02) return; }   // 同一下按键被送来两次：只记一次
   noteOff(m);
   const n = { t: now() - R.t0, d: 0, m, v }; R.notes.push(n); R.open.set(m, n); liveText();
 }
