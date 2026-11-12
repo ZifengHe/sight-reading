@@ -1251,7 +1251,7 @@ function fgCompute(piece, segs) {
     const lh = h === 'lh';
     const ons = fgSolveHand(piece.bars, h);
     const shown = new Map(); let barOf = -1, inBar = 0, hasSrc = false;
-    const force = fgCrossSet(ons, lh);   // 穿指的地方一定标，不受“不重复”“每小节最多 3 处”限制
+    const force = fgCrossSet(ons, lh);   // 穿指的地方要标，不受“每小节最多 3 处”限制（同样的穿法 8 小节内标过的不重复）
     ons.forEach((o, k) => {
       const nw = []; o.ns.forEach((x, i) => { if (!x.held) nw.push({ x, f: o.fs[i] }); });
       const p = k ? ons[k - 1] : null;
@@ -1271,11 +1271,11 @@ function fgCompute(piece, segs) {
         const jump = o.t - Math.max(...p.ns.map((x) => x.end)) >= 24 - 1e-6 || (T ? sp < T[0] || sp > T[5] : a.midi !== b.midi);
         key = (jump ? 'J' : fa + '>' + (b.midi - a.midi)) + '|' + key;
       }
+      if (force.has(k)) show = true;
       if (show && !first && shown.has(key) && o.bi - shown.get(key) < 8) show = false;
       // 一小节里一只手最多提示 3 处，免得满谱都是数字
       if (o.bi !== barOf) { barOf = o.bi; inBar = 0; }
-      if (show && !first && inBar >= 3) show = false;
-      if (force.has(k)) show = true;
+      if (show && !first && inBar >= 3 && !force.has(k)) show = false;
       if (show) { shown.set(key, o.bi); inBar++; }
       for (const { x, f } of nw) for (const it of [x.it, ...x.dup]) {
         const e = it.e; (e.fgAll = e.fgAll || [])[it.i] = f;
