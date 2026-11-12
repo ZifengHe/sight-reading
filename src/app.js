@@ -277,7 +277,7 @@ const LEVELS = [
     lhPat: { arp16: 1.8, alberti16: 1.2, bassLine: 2, stride: 1.5, brokenOct: 1.5, triplet: 1.5, octaves: 1.2, arp8: 1 }, bars: 8, dyn: true, stacc: 0.2, accent: true, chrom: 0.3, split: 0.55, sec: 0.55, borrow: 0.35, swap: 0.35, tex: { thirds: 0.2, chordal: 0.3, octaves: 0.22 }, chordNotes: 3 },
 ];
 const EX_PER_LEVEL = 198;
-const PASS_PCT = 88;   // “自动接下一首”：这一首的正确率要大于它才进下一首，否则重弹这一首
+const PASS_PCT = 100;   // “自动接下一首”：这一首的正确率要达到它（每个音都弹对）才进下一首，否则重弹这一首
 const ONSET_RATE = [0.9, 1.2, 1.5, 1.9, 2.3, 2.7, 3.1, 3.5, 4.0, 4.5, 5.1];   // 各级目标：每秒起音数
 const BUSY = { arp16: 2, alberti16: 2, brokenOct: 1, alberti: 1, broken: 1, arp8: 1, triplet: 1, bassLine: 1 };
 const COMPAT = { triplet: ['4/4', '3/4', '2/4'], arp16: ['4/4', '3/4', '2/4', '6/8'], alberti16: ['4/4', '3/4', '2/4', '6/8'] };
@@ -1450,7 +1450,7 @@ function schedule() {
       // 有评分：等这一首真正弹完再看正确率，光标先停在末尾
       const at = ctxTimeOf(ex.endT0);
       if (AU.ctx.currentTime < at) { P.hold = { t0: ex.endT0, until: Infinity }; return; }
-      const pass = exPct(ex.gi) > PASS_PCT;
+      const pass = exPct(ex.gi) >= PASS_PCT;
       if (pass && last) { P.stopAt = AU.ctx.currentTime + 0.3; return; }
       const c = AU.ctx.currentTime + 0.06;
       P.hold = { t0: ex.endT0, until: c };
@@ -1697,20 +1697,20 @@ function updateLiveScore() {
 function exPct(gi) {
   const sc = SC[gi];
   if (LM.active || !MIDI.connected || !sc || !sc.exp.length) return null;
-  return Math.round((100 * sc.hit) / sc.exp.length);
+  return sc.hit >= sc.exp.length ? 100 : Math.min(99, Math.round((100 * sc.hit) / sc.exp.length));   // 差一个音也不显示成 100%
 }
 function showScore(gi, again) {
   if (LM.active) return;
   const sc = SC[gi]; if (!sc || !MIDI.connected) return;
   const tot = sc.exp.length; if (!tot) return;
-  const pct = Math.round((100 * sc.hit) / tot);
+  const pct = sc.hit >= tot ? 100 : Math.min(99, Math.round((100 * sc.hit) / tot));
   if (sc.hit + sc.miss === 0) return;
   const el = document.getElementById('sc' + gi);
   if (el) el.textContent = `正确率 ${pct}%  错音 ${sc.wrong}`;
   const ex = S.exs[gi];
   const name = ex ? `${ex.li === 0 ? '入门' : LEVELS[ex.li].name} 练习 ${ex.ei + 1}` : '上一首';
   HUD.last = `${name}：${pct}%`;
-  toast(`${name}：正确率 ${pct}%（弹对 ${sc.hit}/${tot}，错音 ${sc.wrong}）` + (again ? `，没超过 ${PASS_PCT}%，再弹一遍` : ''));
+  toast(`${name}：正确率 ${pct}%（弹对 ${sc.hit}/${tot}，错音 ${sc.wrong}）` + (again ? `，没到 ${PASS_PCT}%，再弹一遍` : ''));
   hud();
 }
 async function connectMidi() {
@@ -1756,7 +1756,7 @@ function prepFollow() {
   if (FOL.timer) { clearTimeout(FOL.timer); FOL.timer = null; }
   const o = S.ons[FOL.idx];
   if (!o && LM.active) { learnFollowPassEnd(); return; }
-  if (!o && !LM.active && !S.settings.loop && S.settings.cont && exPct(P.curEx) !== null && !(exPct(P.curEx) > PASS_PCT)) {   // 最后一首没过关：也重弹
+  if (!o && !LM.active && !S.settings.loop && S.settings.cont && exPct(P.curEx) !== null && !(exPct(P.curEx) >= PASS_PCT)) {   // 最后一首没过关：也重弹
     showScore(P.curEx, true); FOL.idx = lowerBound(S.ons, S.exs[P.curEx].startT0); resetScore(P.curEx); return prepFollow();
   }
   if (!o) { stopPlay(false); return; }
@@ -1764,7 +1764,7 @@ function prepFollow() {
   if (LM.active && (o.t0 >= LM.endT0 - 1e-6 || !o)) { learnFollowPassEnd(); return; }
   if (LM.active && o.ex !== P.curEx) P.curEx = o.ex;
   if (o.ex !== P.curEx) {
-    const again = !S.settings.loop && S.settings.cont && exPct(P.curEx) !== null && !(exPct(P.curEx) > PASS_PCT);
+    const again = !S.settings.loop && S.settings.cont && exPct(P.curEx) !== null && !(exPct(P.curEx) >= PASS_PCT);
     showScore(P.curEx, again);
     if (S.settings.loop || again) { const ex = S.exs[P.curEx]; FOL.idx = lowerBound(S.ons, ex.startT0); resetScore(P.curEx); return prepFollow(); }
     if (!S.settings.cont) { S.cur = { ex: o.ex, bar: 0 }; stopPlay(false); return; }
