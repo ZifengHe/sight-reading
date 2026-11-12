@@ -127,7 +127,10 @@ function initMidi() {
   let tries = 0;
   const go = () => {
     if (R.midi) return;
-    if (navigator.requestMIDIAccess) { navigator.requestMIDIAccess().then(bind, () => { $('midi').className = 'bad'; $('midi').textContent = 'MIDI 权限被拒绝。请在浏览器里允许使用 MIDI 设备后刷新。'; }); return; }
+    // 嵌在主页里（iframe）时，有的浏览器只给顶层页面注入 Web MIDI，这时借用外层页面的
+    let nav = navigator;
+    try { if (!nav.requestMIDIAccess && parent !== window && parent.navigator.requestMIDIAccess) nav = parent.navigator; } catch (e) { }
+    if (nav.requestMIDIAccess) { nav.requestMIDIAccess().then(bind, () => { $('midi').className = 'bad'; $('midi').textContent = 'MIDI 权限被拒绝。请在浏览器里允许使用 MIDI 设备后刷新。'; }); return; }
     // MIDIWeb Browser 这类 App 会晚一点才注入 requestMIDIAccess，等 10 秒
     if (++tries < 20) setTimeout(go, 500);
     else { $('midi').className = 'bad'; $('midi').textContent = '这个浏览器不支持 MIDI。电脑上请用 Chrome 或 Edge；iPhone / iPad 上请用 MIDIWeb Browser 打开本页。'; }

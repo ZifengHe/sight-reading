@@ -22,11 +22,18 @@ def make_icon():
     buf = io.BytesIO()
     im.resize((180, 180), Image.LANCZOS).save(buf, 'PNG', optimize=True)
     return 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode()
+# 录音分析页嵌进主页（iframe srcdoc）：VexFlow 用外层页面已经载入的那份，不重复打包
+rec = (root / 'record.html').read_text(encoding='utf-8')
+VTAG = '<script src="src/vendor/vexflow-4.2.2.js"></script>'
+assert VTAG in rec
+rec = rec.replace(VTAG, '<script>window.Vex = parent.Vex;</script>')
+rec_js = json.dumps(rec, ensure_ascii=False).replace('</', '<\\/').replace('\u2028', '\\u2028').replace('\u2029', '\\u2029')
 for name, code in [('vexflow', vex), ('app', app)]:
     assert '</script' not in code.lower(), name
 out = (tpl.replace('/*__ICON__*/', make_icon())
           .replace('/*__VEXFLOW__*/', vex)
           .replace('/*__SAMPLES__*/', 'window.PIANO_SAMPLES=' + json.dumps(samples, separators=(',', ':')) + ';')
+          .replace('/*__RECORD__*/""', rec_js)
           .replace('/*__APP__*/', app))
 dst = root / 'sight_reading.html'
 dst.write_text(out, encoding='utf-8')

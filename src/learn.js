@@ -1215,6 +1215,35 @@ function fgPredictable(a, fa, b, fb, lh) {
   const dd = (b.d - a.d) * (lh ? -1 : 1);
   return fb - fa === dd && Math.abs(b.midi - a.midi) <= 7;
 }
+// 穿指 / 跨指：音往上走却换到更靠拇指一侧的手指（拇指从下面穿过去），或者音往下走却换到更靠小指一侧的手指
+//（手指从拇指上面跨过去）。中间隔了一拍以上的休止算挪手，不算。
+function fgIsCross(p, o, lh) {
+  if (!p || o.hasHeld) return false;
+  if (o.t - Math.max(...p.ns.map((x) => x.end)) >= 24 - 1e-6) return false;
+  const one = (a, fa, b, fb) => { const dd = (b.midi - a.midi) * (lh ? -1 : 1); return dd !== 0 && fa !== fb && (dd > 0) !== (fb > fa); };
+  const ph = p.ns.length - 1, ch = o.ns.length - 1;
+  return one(p.ns[0], p.fs[0], o.ns[0], o.fs[0]) && one(p.ns[ph], p.fs[ph], o.ns[ch], o.fs[ch]);
+}
+// 需要标出来的穿指位置：穿之前的那个音和穿过去落下的那个音都标
+function fgCrossSet(ons, lh) {
+  const set = new Set();
+  ons.forEach((o, k) => { if (k && fgIsCross(ons[k - 1], o, lh)) { set.add(k - 1); set.add(k); } });
+  return set;
+}
+// 视奏练习：只在穿指 / 跨指的地方标指法数字
+function fgSight(ex) {
+  if (ex._fgX) return;
+  ex._fgX = true;
+  for (const h of ['rh', 'lh']) {
+    let ons; try { ons = fgSolveHand(ex.bars, h); } catch (er) { continue; }
+    const force = fgCrossSet(ons, h === 'lh');
+    force.forEach((k) => { const o = ons[k]; o.ns.forEach((x, i) => { if (x.held) return; const e = x.it.e; (e.fgX = e.fgX || [])[x.it.i] = o.fs[i]; }); });
+  }
+}
+function fgSightApply(ex, on) {
+  fgSight(ex);
+  for (const b of ex.bars) for (const h of ['rh', 'lh']) for (const e of b[h]) { if (on && e.fgX) e.fgShow = e.fgX; else delete e.fgShow; }
+}
 function fgCompute(piece, segs) {
   const segStart = new Set(segs.map((s) => s.a - 1));
   const res = {};
@@ -1222,6 +1251,7 @@ function fgCompute(piece, segs) {
     const lh = h === 'lh';
     const ons = fgSolveHand(piece.bars, h);
     const shown = new Map(); let barOf = -1, inBar = 0, hasSrc = false;
+    const force = fgCrossSet(ons, lh);   // 穿指的地方一定标，不受“不重复”“每小节最多 3 处”限制
     ons.forEach((o, k) => {
       const nw = []; o.ns.forEach((x, i) => { if (!x.held) nw.push({ x, f: o.fs[i] }); });
       const p = k ? ons[k - 1] : null;
@@ -1245,6 +1275,7 @@ function fgCompute(piece, segs) {
       // 一小节里一只手最多提示 3 处，免得满谱都是数字
       if (o.bi !== barOf) { barOf = o.bi; inBar = 0; }
       if (show && !first && inBar >= 3) show = false;
+      if (force.has(k)) show = true;
       if (show) { shown.set(key, o.bi); inBar++; }
       for (const { x, f } of nw) for (const it of [x.it, ...x.dup]) {
         const e = it.e; (e.fgAll = e.fgAll || [])[it.i] = f;

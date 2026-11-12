@@ -276,7 +276,7 @@ const LEVELS = [
     keys: Object.keys(KEY_DEFS), newKeys: [], heavyKeys: true, times: ['4/4', '3/4', '2/4', '6/8', '12/8'], tier: 7, chordTier: 2, tempo: [80, 138], rh: [24, 46], lh: [9, 29], maxLeap: 7,
     lhPat: { arp16: 1.8, alberti16: 1.2, bassLine: 2, stride: 1.5, brokenOct: 1.5, triplet: 1.5, octaves: 1.2, arp8: 1 }, bars: 8, dyn: true, stacc: 0.2, accent: true, chrom: 0.3, split: 0.55, sec: 0.55, borrow: 0.35, swap: 0.35, tex: { thirds: 0.2, chordal: 0.3, octaves: 0.22 }, chordNotes: 3 },
 ];
-const EX_PER_LEVEL = 98;
+const EX_PER_LEVEL = 198;
 const PASS_PCT = 88;   // “自动接下一首”：这一首的正确率要大于它才进下一首，否则重弹这一首
 const ONSET_RATE = [0.9, 1.2, 1.5, 1.9, 2.3, 2.7, 3.1, 3.5, 4.0, 4.5, 5.1];   // 各级目标：每秒起音数
 const BUSY = { arp16: 2, alberti16: 2, brokenOct: 1, alberti: 1, broken: 1, arp8: 1, triplet: 1, bassLine: 1 };
@@ -847,7 +847,7 @@ function validatePiece(pc) {
 const S = {
   seed: 0, exs: [], levelStart: [], ev: [], bars: [], systems: [],
   cur: { ex: 0, bar: 0 },
-  settings: { speed: 100, metro: false, sound: 'all', hand: 'both', loop: false, cont: true, scroll: true, kbd: true, vol: 80, scale: 100, follow: false, midiSound: false, countIn: 1, cnum: true },
+  settings: { speed: 100, metro: false, sound: 'all', hand: 'both', loop: false, cont: true, scroll: true, kbd: true, vol: 80, scale: 100, follow: false, midiSound: false, countIn: 1, cnum: true, fing: true },
 };
 // 一行谱的逻辑宽度预算：触屏设备按横屏的长边计算，保证横屏时音符不会太小
 function lineBudget() {
@@ -1122,6 +1122,8 @@ function lineGeom(ex, ln) {
     const has = (h) => ln.some((i) => ex.bars[i][h].some((e) => e.tupN));
     if (has('rh')) above += 26;
     if (has('lh')) below += 28;
+  }
+  {
     // 指法数字：右手写在上方、左手写在下方（和弦的几个数字竖着叠）
     const fgN = (h) => Math.max(0, ...ln.map((i) => Math.max(0, ...ex.bars[i][h].map((e) => (e.fgShow ? e.fgShow.filter(Boolean).length : 0)))));
     if (fgN('rh')) above += 4 + 11 * fgN('rh');
@@ -1132,6 +1134,7 @@ function lineGeom(ex, ln) {
   return { trebleY, bassY, H: above + 80 + gap + below };
 }
 function renderExercise(ex, div, cw, pageH, nLines, li) {
+  if (!ex.learn) fgSightApply(ex, S.settings.fing !== false);
   ex.bars.forEach((bar) => buildBarVF(ex, bar));
   const body = div.querySelector('.ex-body');
   const minMW = li <= 2 ? 130 : 100;
@@ -1204,7 +1207,7 @@ function renderExercise(ex, div, cw, pageH, nLines, li) {
         V.voices.forEach((v) => v.draw(ctx, st));
         V.beams.forEach((b) => b.setContext(ctx).draw());
         V.tuplets.forEach((t) => t.setContext(ctx).draw());
-        if (ex.learn) drawFingerings(ctx, bar[h], h, st, V.tuplets);
+        drawFingerings(ctx, bar[h], h, st, V.tuplets);
         ctx.closeGroup();
       }
       // 光标锚点：每个起音位置的 x
@@ -1846,6 +1849,7 @@ function updateStatus(bar) {
   const L = LEVELS[ex.li];
   $('status').innerHTML = `<b>${ex.li === 0 ? '入门' : L.name}</b> <span class="long">练习 </span>${ex.ei + 1}/${EX_PER_LEVEL} · <span class="long">第 </span>${bar.bi + 1}/${ex.bars.length}<span class="long"> 小节</span>`;
   if ($('selLevel').value !== String(ex.li)) $('selLevel').value = String(ex.li);
+  if ($('selEx').value !== String(ex.ei)) $('selEx').value = String(ex.ei);
   updateSpeedLabel();
 }
 function seek(exI, barI, scroll = true) {
@@ -1868,7 +1872,7 @@ function loadSettings() {
 function applySettingsToUI() {
   const st = S.settings;
   $('cMetro').checked = st.metro; $('selSound').value = st.sound; $('selHand').value = st.hand; $('cLoop').checked = st.loop;
-  $('cCont').checked = st.cont; $('cScroll').checked = st.scroll; $('cKbd').checked = st.kbd; $('cNum').checked = st.cnum !== false; $('vol').value = st.vol; $('zoom').value = st.scale;
+  $('cCont').checked = st.cont; $('cScroll').checked = st.scroll; $('cKbd').checked = st.kbd; $('cNum').checked = st.cnum !== false; $('cFing').checked = st.fing !== false; $('vol').value = st.vol; $('zoom').value = st.scale;
   $('cMidiSound').checked = st.midiSound; $('selCount').value = String(st.countIn || 1);
   document.body.classList.toggle('nokbd', !st.kbd);
   updateHandDim();
@@ -1897,6 +1901,17 @@ function initUI() {
   const sel = $('selLevel');
   LEVELS.forEach((L, i) => { const o = document.createElement('option'); o.value = i; o.textContent = i === 0 ? '入门' : L.name; sel.appendChild(o); });
   sel.onchange = () => seek(S.levelStart[+sel.value], 0);
+  const selEx = $('selEx');
+  for (let i = 0; i < EX_PER_LEVEL; i++) { const o = document.createElement('option'); o.value = i; o.textContent = `${i + 1}/${EX_PER_LEVEL}`; selEx.appendChild(o); }
+  selEx.onchange = () => { seek(S.levelStart[+sel.value] + +selEx.value, 0); selEx.blur(); };
+  // 录音分析页：整页嵌在主页里（iframe），和单独打开 record.html 是同一份
+  $('bRec').onclick = () => {
+    if (P.playing) stopPlay(true);
+    const f = $('recFrame');
+    if (!f.dataset.on) { f.dataset.on = '1'; f.srcdoc = window.RECORD_HTML; }
+    $('recOv').hidden = false;
+  };
+  $('recClose').onclick = () => { $('recOv').hidden = true; };
   $('bPlay').onclick = () => (P.playing ? stopPlay(true) : startPlay());
   $('bPrev').onclick = () => seek((P.playing ? P.curEx : S.cur.ex) - (S.cur.bar > 0 && !P.playing ? 0 : 1), 0);
   $('bNext').onclick = () => seek((P.playing ? P.curEx : S.cur.ex) + 1, 0);
@@ -1910,6 +1925,7 @@ function initUI() {
   $('cCont').onchange = (e) => { S.settings.cont = e.target.checked; saveSettings(); };
   $('cScroll').onchange = (e) => { S.settings.scroll = e.target.checked; saveSettings(); };
   $('cNum').onchange = (e) => { S.settings.cnum = e.target.checked; if (!e.target.checked) setCNum(null); saveSettings(); };
+  $('cFing').onchange = (e) => { S.settings.fing = e.target.checked; saveSettings(); rerender(); };
   $('cKbd').onchange = (e) => { S.settings.kbd = e.target.checked; document.body.classList.toggle('nokbd', !e.target.checked); saveSettings(); rerender(); };
   $('selCount').onchange = (e) => { S.settings.countIn = +e.target.value; saveSettings(); if (P.playing) stopPlay(true); buildTimeline(); computeSystemGeometry(); };
   $('cMidiSound').onchange = (e) => { S.settings.midiSound = e.target.checked; saveSettings(); };

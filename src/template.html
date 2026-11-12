@@ -60,7 +60,7 @@ body.dim-lh .vf-hlh,body.dim-rh .vf-hrh{opacity:.28}
 #top .lpop button{padding:5px 10px;font-size:13px}
 .lpop small{color:#9aa0ab}
 .lov{position:absolute;top:0;bottom:0;pointer-events:none;mix-blend-mode:multiply;border-radius:3px}
-.learning #lLevelBox,.learning #bNew{display:none!important}
+.learning #lLevelBox,.learning #lExBox,.learning #lFingBox,.learning #bNew{display:none!important}
 .lpicking .system{cursor:crosshair}
 .lpicking #wrap{box-shadow:inset 0 0 0 3px rgba(224,122,31,.6)}
 #seedTxt{color:#9aa0ab}
@@ -113,6 +113,10 @@ body.nomidi .midi{display:none!important}
 .k.user{background:var(--accent2)!important}
 .k.bad{background:var(--bad)!important}
 #cnum{position:absolute;left:-4px;bottom:-2px;width:26px;height:20px;border-radius:10px;background:rgba(47,111,222,.92);color:#fff;font-weight:700;font-size:14px;line-height:20px;text-align:center;display:none;font-variant-numeric:tabular-nums}
+#recOv{position:fixed;inset:0;z-index:140;background:#f4f1ea}
+#recOv[hidden]{display:none}
+#recFrame{width:100%;height:100%;border:0;display:block}
+#recClose{position:absolute;right:max(12px,env(safe-area-inset-right));top:max(10px,env(safe-area-inset-top));z-index:2;background:#20232a;color:#fff;border:0;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600}
 #loading{position:fixed;inset:0;background:rgba(239,233,220,.92);z-index:100;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;font-size:16px;color:#5a5245}
 #loading.show{display:flex}
 #loadTrack{width:280px;height:8px;border-radius:4px;background:#ddd3bf;overflow:hidden}
@@ -146,7 +150,8 @@ body.nomidi .midi{display:none!important}
   #spdTxt{grid-column:span 2;text-align:center;font-size:12px;min-width:0}
   #spdTxt .bpm{display:none}
   #top>.row>#lMetro{display:flex;align-items:center;justify-content:center;gap:2px;background:var(--bar2);border:1px solid #3c414c;border-radius:8px;font-size:12px}
-  #bHelp{grid-column:span 2}
+  #bHelp,#bRec{grid-column:span 2}
+  #selEx{grid-column:span 2;width:100%;padding:4px 2px!important;font-size:12px}
   #settings{position:fixed;left:calc(66px + env(safe-area-inset-left));top:0;bottom:0;right:auto;width:min(480px,72vw);overflow-y:auto;border-top:none;border-left:1px solid #3a3f49}
   #settings .row{flex-direction:column;align-items:flex-start;gap:10px;font-size:14px}
   #learnPanel{position:fixed;left:calc(66px + env(safe-area-inset-left));top:0;bottom:0;right:auto;width:min(520px,78vw);max-height:none;overflow-y:auto;border-top:none;border-left:1px solid #3a3f49}
@@ -188,11 +193,13 @@ body.nomidi .midi{display:none!important}
     <button id="bPrev" title="上一首（←）">⏮</button>
     <button id="bNext" title="下一首（→）">⏭</button>
     <label id="lLevelBox"><span class="long">级别</span> <select id="selLevel"></select></label>
+    <label id="lExBox"><span class="long">练习</span> <select id="selEx" title="从这一级的第几首开始"></select></label>
     <label class="spdbox"><span class="long">速度</span> <button id="spdDn" class="short" title="减慢">−</button><input id="spd" type="range" min="30" max="150" step="5" value="100"><button id="spdUp" class="short" title="加快">＋</button><span id="spdTxt">100%</span></label>
     <label id="lMetro"><input type="checkbox" id="cMetro"> <span class="long">节拍器</span><span class="short">拍</span></label>
     <button id="bSet">⚙<span class="long"> 设置</span></button>
     <button id="bHelp">?<span class="long"> 说明</span></button>
     <button id="bLearn">📖<span class="long"> 学曲子</span></button>
+    <button id="bRec" title="录下你弹的，给出练习建议">🎙<span class="long"> 录音分析</span></button>
     <div id="midiHud"></div>
     <div id="status"></div>
   </div>
@@ -210,6 +217,7 @@ body.nomidi .midi{display:none!important}
       <label>预备拍 <select id="selCount"><option value="1">1 小节</option><option value="2">2 小节</option><option value="3">3 小节</option></select></label>
       <label><input type="checkbox" id="cKbd" checked> 屏幕键盘</label>
       <label><input type="checkbox" id="cNum" checked> 光标下的拍点数字</label>
+      <label id="lFingBox"><input type="checkbox" id="cFing" checked> 穿指处标指法</label>
       <label>音量 <input type="range" id="vol" min="0" max="100" value="80"></label>
       <label>谱面大小 <input type="range" id="zoom" min="50" max="100" step="5" value="100"></label>
       <button id="bNew">🎲 换一套新谱</button>
@@ -262,7 +270,7 @@ body.nomidi .midi{display:none!important}
 <div id="help"><div class="card">
   <button class="close">关闭</button>
   <h2>怎么用它练视奏</h2>
-  <p>整页是一条连续的乐谱：从<b>入门</b>（中央C五指位置）开始，经过<b>一级到十级</b>，每级 98 首（共 1078 首），难度一首一首往上加。每首练习单独占一屏（两行），弹的时候谱面不动，弹完自动翻到下一首。每次打开都会重新谱写一套<b>从没见过的新谱</b>（视奏要练的就是“第一次看到”）。“设置”里显示的“谱号”可以记下来：网址后面加 <code>#谱号</code>（例如 <code>sight_reading.html#2024</code>）就能找回同一套；点“换一套新谱”则重新谱写全部练习。</p>
+  <p>整页是一条连续的乐谱：从<b>入门</b>（中央C五指位置）开始，经过<b>一级到十级</b>，每级 198 首（共 2178 首），难度一首一首往上加。每首练习单独占一屏（两行），弹的时候谱面不动，弹完自动翻到下一首。每次打开都会重新谱写一套<b>从没见过的新谱</b>（视奏要练的就是“第一次看到”）。“设置”里显示的“谱号”可以记下来：网址后面加 <code>#谱号</code>（例如 <code>sight_reading.html#2024</code>）就能找回同一套；点“换一套新谱”则重新谱写全部练习。</p>
   <h3>进入心流的方法</h3>
   <ul>
     <li><b>选一个“刚好有点难”的级别</b>：能弹对 80%–90% 就是最合适的难度。太轻松就往后跳，太吃力就退一级或把速度调慢。</li>
@@ -276,6 +284,9 @@ body.nomidi .midi{display:none!important}
     <li><b>速度</b>：按每首推荐速度的百分比调整。<kbd>↑</kbd><kbd>↓</kbd> 每次 ±5%。</li>
     <li><b>声音</b>：“全部播放”=先听一遍再弹；“只播我不弹的手”=分手练习时让电脑弹另一只手；“只播我弹的手”=电脑给你练的这只手做示范；“静音”=完全自己弹，只跟光标。</li>
     <li><b>光标下的拍点数字</b>：播放时光标底部的蓝色数字每小节从 0 数起，一个八分音符加 1（4/4 拍是 0–7），节奏均匀，可以用它数拍子。不想看可以在设置里关掉。</li>
+    <li><b>练习下拉列表</b>：顶栏“练习”可以直接跳到这一级 198 首里的任意一首，从那里开始。</li>
+    <li><b>穿指处标指法</b>：需要拇指从下面穿过去、或手指从拇指上面跨过去的地方，谱上用蓝色数字标出前后两个音的手指（1 拇指 … 5 小指；右手在上方、左手在下方）。其余的音按相邻手指顺着弹，不标。指法是 App 自动算的，可以在设置里关掉。</li>
+    <li><b>🎙 录音分析</b>：顶栏的按钮，打开“录下来分析”页（Record / StartAnalysis），随便弹什么都能给建议；按“✕ 回到练习”返回。</li>
     <li><b>循环本曲</b>：同一首反复练（第二遍以后就不算视奏了，适合难点）。</li>
     <li><b>点击谱面任意小节</b>即可从那里开始。</li>
   </ul>
@@ -312,6 +323,8 @@ body.nomidi .midi{display:none!important}
 </div></div>
 <script>/*__VEXFLOW__*/</script>
 <script>/*__SAMPLES__*/</script>
+<div id="recOv" hidden><button id="recClose">✕ 回到练习</button><iframe id="recFrame" allow="midi" title="录音分析"></iframe></div>
+<script>window.RECORD_HTML=/*__RECORD__*/"";</script>
 <script>/*__APP__*/</script>
 </body>
 </html>
