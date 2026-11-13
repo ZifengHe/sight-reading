@@ -256,8 +256,9 @@ body.nomidi .midi{display:none!important}
       <div id="lLog" class="lnote lneed"></div>
       <button id="lClear" class="lneed">清除这首的记录</button>
       <span class="lbreak"></span>
-      <div class="lnote"><b>🎵 POP909 曲库</b>：909 首华语流行歌的钢琴编配（右手旋律、左手伴奏），点歌名就载入。谱面来自 POP909-CL（校正过小节线和调号，MIT 许可），速度取自原版 POP909 数据集（music-x-lab，MIT 许可）；点歌时从它们的 GitHub 下载，需要能上网。</div>
+      <div class="lnote"><b>🎵 POP909 曲库</b>：909 首华语流行歌的钢琴编配（右手旋律、左手伴奏），点歌名就载入。谱面来自 POP909-CL（校正过小节线和调号，MIT 许可），速度取自原版 POP909 数据集（music-x-lab，MIT 许可）；点歌时从它们的 GitHub 下载，需要能上网。勾上“C 调简化版”再点歌，会把这首歌移到 C 调、右手只留主旋律（节奏归到八分音符）、左手每小节一两个低音。</div>
       <input id="lSearch" type="search" placeholder="搜歌名或歌手，例如 邓丽君" autocomplete="off">
+      <label><input type="checkbox" id="lSimple"> C 调简化版（右手只弹主旋律，左手每小节一两个低音）</label>
       <div id="lPop" class="lpop"></div>
     </div>
   </div>
@@ -3129,12 +3130,48 @@ function pop909clToPiece(Mi, beatText, meta) {
     defs.push({ start: x, len, ts: len === ts.len ? ts : len % 24 === 0 ? makeTS(len / 24, 4) : len % 12 === 0 ? makeTS(len / 12, 8) : makeTS(Math.max(1, Math.round(len / 6)), 16), key: at(kl, x).key });
     x += len;
   }
+  if (meta.simple) { notes = popSimplify(notes, defs, (Mi.keyList.length ? Mi.keyList : [{ tick: 0, sf: estimateFifths(notes) }]).map((x) => ({ at: Math.round(q24(x.tick)), sf: x.sf })), Mi.names); trip.clear(); }
   const bars = notesToBars(notes, defs, defs[0].key, (t) => trip.has(Math.floor(t / 24)));
   // 速度：原版节拍文件里一拍的秒数（一拍 = 480 个 CL tick）
   let bpm = (60 * 480) / (0.6 * Mi.div);
   const rows = (beatText || '').split(/\n/).map((l) => parseFloat(l)).filter((v) => isFinite(v));
   if (rows.length > 8) { const rs = []; for (let k = 1; k < rows.length; k++) rs.push(rows[k] - rows[k - 1]); rs.sort((a, b) => a - b); const rowSec = rs[rs.length >> 1]; if (rowSec > 0.1) bpm = (60 * 480) / (rowSec * Mi.div); }
   return { title: meta.name, bpm: Math.round(clamp(bpm, 30, 240)), bars };
+}
+// C 调简化版：整首移到 C 大调 / a 小调（中途转调的段落也各自移回来），右手只留主旋律的单音、节奏归到八分音符，
+// 左手每小节（4/4 拍每半小节）只弹一个低音（原编配这一段最低的那个音）。
+function popSimplify(notes, defs, kl, names) {
+  const nm = (n) => ((names && names[n.track]) || '').toUpperCase();
+  // 每个调号段移多少个半音：调号变成没有升降号；相邻两段取最接近的移法，免得旋律突然跳八度
+  let prev = null;
+  for (const k of kl) { let sh = -((((k.sf * 7) % 12) + 12) % 12); if (sh < -6) sh += 12; if (prev !== null) { while (sh - prev > 6) sh -= 12; while (prev - sh > 6) sh += 12; } k.sh = prev = sh; }
+  const shAt = (x) => { let r = kl[0]; for (const y of kl) if (y.at <= x + 1e-6) r = y; return r.sh; };
+  const q8 = (x) => Math.round(x / 12) * 12;
+  // 右手：主旋律，每个起音位置只留最高的一个音，时值到下一个音为止
+  let mel = notes.filter((n) => n.hand === 'rh' && nm(n) === 'MELODY'); if (!mel.length) mel = notes.filter((n) => n.hand === 'rh');
+  const by = new Map();
+  for (const n of mel) { const s0 = q8(n.s); const m = n.midi + shAt(n.s); const o = by.get(s0); if (!o || m > o.midi) by.set(s0, { hand: 'rh', midi: m, s: s0, e: Math.max(s0 + 12, q8(n.e)) }); }
+  const rh = [...by.values()].sort((a, b) => a.s - b.s);
+  rh.forEach((n, i) => { if (i + 1 < rh.length && n.e > rh[i + 1].s) n.e = rh[i + 1].s; });
+  if (rh.length) { const lo = Math.min(...rh.map((n) => n.midi)), hi = Math.max(...rh.map((n) => n.midi)); const up = 12 * Math.round((68 - (lo + hi) / 2) / 12); rh.forEach((n) => { n.midi += up; }); }
+  // 左手：每段一个低音，放在小字组（C3–B3）
+  const src = notes.filter((n) => n.hand === 'lh').sort((a, b) => a.s - b.s);
+  const lh = [];
+  const bass = (a, b) => {
+    let c = src.filter((n) => n.s >= a - 1e-6 && n.s < a + 24); if (!c.length) c = src.filter((n) => n.s < b && n.e > a);
+    if (!c.length) return null;
+    const n = c.reduce((x, y) => (y.midi < x.midi ? y : x));
+    return 48 + ((((n.midi + shAt(a)) % 12) + 12) % 12);
+  };
+  for (const d of defs) {
+    const a = d.start, b = d.start + d.len;
+    const cuts = d.len === 96 ? [[a, a + 48], [a + 48, b]] : [[a, b]];
+    const got = cuts.map(([x, y]) => ({ s: x, e: y, midi: bass(x, y) })).filter((g) => g.midi !== null);
+    if (got.length === 2 && got[0].midi === got[1].midi) { got[0].e = got[1].e; got.pop(); }
+    for (const g of got) lh.push({ hand: 'lh', midi: g.midi, s: g.s, e: g.e });
+  }
+  const C = makeKey('C'); defs.forEach((d) => { d.key = C; });
+  return [...rh, ...lh];
 }
 // 公用：把（已量化的）音按小节摆好，拆成谱上能写的时值，加连音线、谱号、临时记号
 function notesToBars(notes, defs, key, tripBeat) {
@@ -3992,7 +4029,7 @@ async function learnFromLink(h) {
   $('loading').classList.add('show');
   try {
     let r;
-    if (q.has('pop')) r = await pop909Load(+q.get('pop'));
+    if (q.has('pop')) r = await pop909Load(+q.get('pop'), q.get('c') === '1');
     else if (q.has('e')) {
       r = await learnLoadBytes(await fetchEncryptedScore(q.get('e'), q.get('k') || ''), 'score');
       const list = pieceList(); const ent = list.find((p) => p.id === r.id);
@@ -4011,7 +4048,7 @@ async function learnMakeLink() {
   if (!LM.id) return null;
   const base = location.origin + location.pathname;
   const ent = pieceList().find((p) => p.id === LM.id);
-  if (ent && ent.pop) return { url: `${base}#pop=${ent.pop}`, private: false };
+  if (ent && ent.pop) return { url: `${base}#pop=${ent.pop}${ent.simple ? '&c=1' : ''}`, private: false };
   if (ent && ent.link) return { url: base + ent.link, private: true, short: true };
   const rec = await IDB.get('piece:' + LM.id); if (!rec) return null;
   const u8 = rec.kind === 'xml' ? new TextEncoder().encode(rec.data) : rec.data;
@@ -4027,12 +4064,16 @@ const POP909_PICK = [526, 640, 905, 898, 428, 124, 222, 26, 879, 687, 171, 385, 
 function pop909Render(q) {
   q = (q || '').trim().toLowerCase();
   const list = q ? POP909.filter((x) => (x.name + ' ' + x.artist).toLowerCase().includes(q)).slice(0, 60) : POP909_PICK.map((id) => POP909[id - 1]).filter(Boolean);
-  $('lPop').innerHTML = list.length ? list.map((x) => `<button data-pop="${x.id}">${escHtml(x.name)}<small> · ${escHtml(x.artist)}</small></button>`).join('') : '<span class="muted">没有找到</span>';
+  const sm = $('lSimple') && $('lSimple').checked;
+  // 用户点名要的简化版：不用勾选，直接放在最前面
+  const pin = q || sm ? '' : `<button data-pop="898" data-simple="1">在水一方<small> · C调简化版</small></button>`;
+  $('lPop').innerHTML = list.length ? pin + list.map((x) => `<button data-pop="${x.id}">${escHtml(x.name)}<small> · ${sm ? 'C调简化版' : escHtml(x.artist)}</small></button>`).join('') : '<span class="muted">没有找到</span>';
 }
-async function pop909Load(id) {
+async function pop909Load(id, simple) {
+  simple = !!simple;
   const meta = POP909[id - 1]; if (!meta) throw new Error('编号不对');
-  const name = `${meta.name}（${meta.artist}）`;
-  const have = pieceList().find((p) => p.pop === id);
+  const name = simple ? `${meta.name}（C调简化版）` : `${meta.name}（${meta.artist}）`;
+  const have = pieceList().find((p) => p.pop === id && !!p.simple === simple);
   if (have) return { id: have.id, name: have.name, n: have.bars, existed: true };
   const n3 = String(id).padStart(3, '0');
   const base = `https://raw.githubusercontent.com/music-x-lab/POP909-Dataset/master/POP909/${n3}/`;
@@ -4046,11 +4087,12 @@ async function pop909Load(id) {
     if (r1.ok) mid = new Uint8Array(await r1.arrayBuffer());
     else { kind = 'pop909'; const r3 = await fetch(base + n3 + '.mid'); if (!r3.ok) throw new Error('HTTP ' + r3.status); mid = new Uint8Array(await r3.arrayBuffer()); }
   } catch (e) { throw new Error('下载失败（需要能上网）：' + e.message); }
-  const rec = { kind, data: mid, beat, name, E: meta.E, F: meta.F };
+  const rec = { kind, data: mid, beat, name, E: meta.E, F: meta.F, simple: simple && kind === 'pop909cl' };
+  if (simple && !rec.simple) throw new Error('这首歌没有校正过的谱面，做不了简化版');
   const piece = kind === 'pop909cl' ? pop909clToPiece(parseMidi(mid), beat, rec) : pop909ToPiece(parseMidi(mid), beat, rec);
   const pid = 'p' + Date.now().toString(36);
   await IDB.put('piece:' + pid, rec);
-  const list = pieceList(); list.unshift({ id: pid, name, kind: 'pop909', pop: id, bars: piece.bars.length, added: today() }); lsSet('sr.pieces', list);
+  const list = pieceList(); list.unshift({ id: pid, name, kind: 'pop909', pop: id, simple, bars: piece.bars.length, added: today() }); lsSet('sr.pieces', list);
   return { id: pid, name, n: piece.bars.length };
 }
 
@@ -4100,11 +4142,12 @@ function learnInitUI() {
   $('lPiece').onchange = async (e) => { if (e.target.value) await learnEnter(e.target.value); };
   pop909Render('');
   $('lSearch').oninput = (e) => pop909Render(e.target.value);
+  $('lSimple').onchange = () => pop909Render($('lSearch').value);
   $('lPop').onclick = async (e) => {
     const btn = e.target.closest('button[data-pop]'); if (!btn) return;
     try {
       $('loading').classList.add('show');
-      const r = await pop909Load(+btn.dataset.pop);
+      const r = await pop909Load(+btn.dataset.pop, btn.dataset.simple === '1' || $('lSimple').checked);
       toast(r.existed ? `打开《${r.name}》` : `已载入《${r.name}》，共 ${r.n} 小节`);
       await learnEnter(r.id);
     } catch (er) { toast('载入失败：' + er.message); console.error(er); }

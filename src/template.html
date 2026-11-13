@@ -256,8 +256,9 @@ body.nomidi .midi{display:none!important}
       <div id="lLog" class="lnote lneed"></div>
       <button id="lClear" class="lneed">清除这首的记录</button>
       <span class="lbreak"></span>
-      <div class="lnote"><b>🎵 POP909 曲库</b>：909 首华语流行歌的钢琴编配（右手旋律、左手伴奏），点歌名就载入。谱面来自 POP909-CL（校正过小节线和调号，MIT 许可），速度取自原版 POP909 数据集（music-x-lab，MIT 许可）；点歌时从它们的 GitHub 下载，需要能上网。</div>
+      <div class="lnote"><b>🎵 POP909 曲库</b>：909 首华语流行歌的钢琴编配（右手旋律、左手伴奏），点歌名就载入。谱面来自 POP909-CL（校正过小节线和调号，MIT 许可），速度取自原版 POP909 数据集（music-x-lab，MIT 许可）；点歌时从它们的 GitHub 下载，需要能上网。勾上“C 调简化版”再点歌，会把这首歌移到 C 调、右手只留主旋律（节奏归到八分音符）、左手每小节一两个低音。</div>
       <input id="lSearch" type="search" placeholder="搜歌名或歌手，例如 邓丽君" autocomplete="off">
+      <label><input type="checkbox" id="lSimple"> C 调简化版（右手只弹主旋律，左手每小节一两个低音）</label>
       <div id="lPop" class="lpop"></div>
     </div>
   </div>
