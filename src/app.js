@@ -509,7 +509,7 @@ function respell(d, a) {
   const d2 = d + Math.sign(a);
   return { d: d2, a: midi - midiOf(d2, 0), midi };
 }
-function levelOf(li) { return LEVELS[li]; }
+function levelOf(li) { return LEVELS[li + 1]; }   // 谱曲用的级别编号从“入门”= 0 算起；LEVELS[0] 是节奏级
 function pickKeyFor(L, p, li) {
   const ws = L.keys.map((k) => {
     const f = Math.abs(KEY_DEFS[k][3]);
@@ -826,6 +826,126 @@ function genExercise(li, ei, seed, forceBars) {
   return piece;
 }
 
+/* ======================= 节奏级 =======================
+ * 右手只弹 G4、左手只弹 C3，练的只有节奏。198 首分成 16 个阶段：先单手、再轮流、再双手；
+ * 节奏型从全音符 / 二分 / 四分，到休止符、八分、附点、切分、十六分、三连音，最后两手节奏不同。
+ * 每个阶段开头速度退回去一点，阶段内逐渐加快；整体由慢到快。 */
+LEVELS.unshift({ name: '节奏', en: 'Rhythm', rhythm: true, desc: '右手只弹 G、左手只弹 C · 只练节奏：从全音符到十六分音符、三连音，从单手到两手不同节奏，由慢到快' });
+const RHY_POOL = {
+  '4/4': [
+    ['w', 'h h', 'q q h', 'h q q', 'q q q q', 'hd q', 'q h q'],
+    ['q rq q rq', 'h rq q', 'rq q q q', 'q q rq q', 'rh h', 'q rq h', 'rq q rq q'],
+    ['8 8 q h', 'q 8 8 q q', '8 8 8 8 h', 'q q 8 8 q', '8 8 q 8 8 q', 'h 8 8 q', '8 8 8 8 8 8 q'],
+    ['qd 8 h', 'qd 8 q q', 'q qd 8 q', 'qd 8 qd 8', 'h qd 8', 'qd 8 8 8 q'],
+    ['8 q 8 h', '8 q 8 q q', 'q 8 q 8 q', 'r8 8 q h', 'r8 8 r8 8 h', '8 q q q 8', 'q r8 8 q q', '8 q 8 8 q 8'],
+    ['16 16 16 16 q h', '8 16 16 q h', '16 16 8 q q q', 'q 16 16 16 16 8 8 q', '8 16 16 8 16 16 h', '16 16 16 16 16 16 16 16 h', 'q 8 16 16 q q'],
+    ['t t t q h', 'q t t t h', 't t t t t t h', 'q q t t t q', 't t t 8 8 h', '8 8 t t t h'],
+    ['8d 16 q h', '8d 16 8d 16 h', 'q 8d 16 q q', '16 8 16 q h', '8d 16 8 8 q q', '16 8 16 16 8 16 h'],
+  ],
+  '3/4': [
+    ['hd', 'h q', 'q h', 'q q q'],
+    ['q rq q', 'h rq', 'rq q q', 'q q rq'],
+    ['8 8 q q', 'q 8 8 q', '8 8 8 8 q', 'h 8 8', 'q q 8 8'],
+    ['qd 8 q', 'q qd 8', 'qd 8 8 8'],
+    ['8 q 8 q', 'r8 8 q q', 'q 8 q 8', 'r8 8 r8 8 q'],
+    ['16 16 16 16 q q', '8 16 16 q q', 'q 16 16 8 q', '16 16 16 16 8 8 q'],
+    ['t t t q q', 'q t t t q', 't t t t t t q'],
+    ['8d 16 q q', '8d 16 8d 16 q', 'q 8d 16 q'],
+  ],
+  '6/8': [
+    ['hd', 'qd qd', 'q 8 qd', 'qd q 8', 'q 8 q 8'],
+    ['qd rqd', 'q 8 rqd', 'rqd qd'],
+    ['8 8 8 qd', 'qd 8 8 8', '8 8 8 8 8 8', '8 8 8 q 8', 'q 8 8 8 8'],
+    ['8 q qd', '8 q 8 q', 'qd 8 q'],
+    ['r8 8 8 qd', 'r8 8 8 r8 8 8', '8 r8 8 qd'],
+    ['16 16 8 8 qd', '8 16 16 8 qd', '8 8 16 16 qd', '16 16 16 16 8 qd'],
+  ],
+};
+const RHY_STEADY = { '4/4': ['w', 'h h', 'q q q q'], '3/4': ['hd', 'q q q'], '6/8': ['hd', 'qd qd'] };
+const RHY_FINAL = { '4/4': ['w', 'h h', 'q q h'], '3/4': ['hd', 'q h'], '6/8': ['hd', 'qd qd'] };
+// 阶段：tex = 哪只手弹（rh / lh / altbar 一小节一换 / split 一小节里前半右手后半左手 / uni 两手同节奏 /
+//            steadyL 左手打稳定的拍、右手弹节奏 / steadyR 反过来 / indep 两手节奏不同）；tier = 新学的节奏型；old = 混进来的旧节奏型最高到哪一档
+const RHY_STAGES = [
+  { t: '右手 · 全音符、二分、四分', tex: ['rh'], time: '4/4', tier: 0, bpm: [56, 66] },
+  { t: '左手 · 全音符、二分、四分', tex: ['lh'], time: '4/4', tier: 0, bpm: [56, 66] },
+  { t: '两手轮流', tex: ['altbar', 'split'], time: '4/4', tier: 0, bpm: [60, 72] },
+  { t: '两手一起 · 同样的节奏', tex: ['uni'], time: '4/4', tier: 0, bpm: [60, 72] },
+  { t: '一只手打拍子，另一只手弹节奏', tex: ['steadyL', 'steadyR'], time: '4/4', tier: 0, bpm: [60, 76] },
+  { t: '休止符', tex: ['rh', 'lh', 'altbar', 'uni', 'steadyL'], time: '4/4', tier: 1, bpm: [60, 76] },
+  { t: '八分音符', tex: ['rh', 'lh', 'altbar', 'split'], time: '4/4', tier: 2, bpm: [56, 72] },
+  { t: '八分音符 · 双手', tex: ['uni', 'steadyL', 'steadyR'], time: '4/4', tier: 2, bpm: [60, 80] },
+  { t: '三拍子', tex: ['rh', 'lh', 'altbar', 'uni', 'steadyL', 'steadyR'], time: '3/4', tier: 2, old: 2, bpm: [66, 88] },
+  { t: '附点四分音符', tex: ['rh', 'lh', 'altbar', 'steadyL', 'steadyR'], time: '4/4', tier: 3, bpm: [63, 84] },
+  { t: '切分音与八分休止符', tex: ['rh', 'lh', 'altbar', 'steadyL', 'steadyR'], time: '4/4', tier: 4, bpm: [63, 88] },
+  { t: '6/8 拍', tex: ['rh', 'lh', 'altbar', 'uni', 'steadyL', 'steadyR'], time: '6/8', tier: 4, old: 4, bpm: [72, 108] },
+  { t: '十六分音符', tex: ['rh', 'lh', 'altbar', 'steadyL', 'steadyR'], time: '4/4', tier: 5, bpm: [54, 76] },
+  { t: '三连音与附点八分', tex: ['rh', 'lh', 'altbar', 'steadyL', 'steadyR'], time: '4/4', tier: 7, newFrom: 6, bpm: [60, 84] },
+  { t: '两手节奏不同', tex: ['indep'], time: '4/4', tier: 4, old: 4, bpm: [60, 88] },
+  { t: '综合 · 快速', tex: ['indep', 'steadyL', 'steadyR', 'altbar', 'split'], time: ['4/4', '4/4', '3/4', '6/8'], tier: 7, old: 7, bpm: [80, 120] },
+];
+function genRhythm(ei, seed) {
+  seedRng(hash(seed, 9001, ei * 37 + 3));
+  const NS = RHY_STAGES.length;
+  const si = Math.min(NS - 1, Math.floor(ei * NS / EX_PER_LEVEL));
+  const first = Math.ceil(si * EX_PER_LEVEL / NS), nxt = Math.ceil((si + 1) * EX_PER_LEVEL / NS);
+  const q = (ei - first) / Math.max(1, nxt - first - 1);   // 这个阶段里走到哪了（0–1）
+  const St = RHY_STAGES[si];
+  const tsName = Array.isArray(St.time) ? pick(St.time) : St.time;
+  const ts = TS[tsName], key = makeKey('C');
+  const pools = RHY_POOL[tsName], top = Math.min(St.tier, pools.length - 1);
+  const newFrom = Math.min(St.newFrom ?? St.tier, top);
+  // 阶段开头每个阶段的第一首用最简单的织体，后面在几种织体里轮换
+  const tex = St.tex[ei === first ? 0 : Math.floor(rnd() * St.tex.length)];
+  const R = respell(32, 0), Lh = respell(21, 0);
+  const NB = 8;
+  // 新节奏型的比例随阶段内进度从 35% 升到 65%，其余用学过的
+  const pickPat = (maxTier = top) => {
+    const useNew = St.old !== undefined ? false : chance(0.35 + 0.3 * q);
+    const tier = useNew ? newFrom + Math.floor(rnd() * (Math.min(maxTier, top) - newFrom + 1)) : Math.floor(rnd() * (Math.min(maxTier, St.old ?? top) + 1));
+    return pick(pools[clamp(tier, 0, pools.length - 1)]);
+  };
+  const pats = [];
+  for (let i = 0; i < NB; i++) pats.push(i === NB - 1 ? pick(RHY_FINAL[tsName]) : i === 3 ? pick(pools[0]) : (i === 4 || i === 5) && chance(0.6) ? pats[i - 4] : pickPat());
+  // 保证这一首里至少有一小节是这个阶段新学的节奏
+  if (St.old === undefined && newFrom > 0 && !pats.some((x) => pools.slice(newFrom, top + 1).some((pl) => pl.includes(x)))) pats[1] = pick(pools[newFrom]);
+  const evs = (str, n) => parseRhythm(str).evs.map((e) => (e.rest ? e : { ...e, notes: [{ ...n }] }));
+  const fullRest = () => [{ pos: 0, dur: ts.len, rest: true, full: true, notes: [] }];
+  const steady = pick(RHY_STEADY[tsName].slice(0, 1 + Math.round(q * (RHY_STEADY[tsName].length - 1))));
+  const half = ts.split[0];
+  const piece = { li: 0, ei, key, ts, tex: 'both', bars: [], p: ei / (EX_PER_LEVEL - 1) };
+  pats.forEach((pat, i) => {
+    let rh, lh;
+    const last = i === NB - 1;
+    if (tex === 'rh') { rh = evs(pat, R); lh = fullRest(); }
+    else if (tex === 'lh') { lh = evs(pat, Lh); rh = fullRest(); }
+    else if (tex === 'altbar') { if (i % 2 === 0) { rh = evs(pat, R); lh = fullRest(); } else { lh = evs(pat, Lh); rh = fullRest(); } if (last) { rh = evs(pat, R); lh = evs(pat, Lh); } }
+    else if (tex === 'split') {
+      // 一小节里前半右手、后半左手：只有正好能在小节中间断开的节奏才这样分
+      const a = parseRhythm(pat).evs;
+      if (!last && a.some((e) => e.pos === half) && !a.some((e) => e.tup && e.pos < half && e.pos + e.dur > half)) {
+        const restOf = (len) => splitDur(len).map((d) => ({ dur: d, rest: true, notes: [] }));
+        const mk = (mine, n) => { const out = []; let pos = 0; const add = (e) => { out.push({ ...e, pos }); pos += e.dur; };
+          if (!mine(0)) restOf(half).forEach(add);
+          a.filter((e) => mine(e.pos)).forEach((e) => add(e.rest ? e : { ...e, notes: [{ ...n }] }));
+          if (!mine(half)) restOf(ts.len - half).forEach(add);
+          return out; };
+        rh = mk((p0) => p0 < half, R); lh = mk((p0) => p0 >= half, Lh);
+      } else { rh = evs(pat, R); lh = last ? evs(pat, Lh) : fullRest(); }
+    }
+    else if (tex === 'uni') { rh = evs(pat, R); lh = evs(pat, Lh); }
+    else if (tex === 'steadyL') { rh = evs(pat, R); lh = evs(last ? pat : steady, Lh); }
+    else if (tex === 'steadyR') { lh = evs(pat, Lh); rh = evs(last ? pat : steady, R); }
+    else { rh = evs(pat, R); lh = evs(last ? pat : pickPat(Math.max(0, top - 1)), Lh); }
+    piece.bars.push({ len: ts.len, phrase: i < 4 ? 0 : 1, idx: i % 4, rh, lh, spans: [] });
+  });
+  const bpmQ = lerp(St.bpm[0], St.bpm[1], q);   // 表里写的是拍速；6/8 一拍是附点四分
+  piece.bpm = Math.round((ts.comp ? bpmQ * 1.5 : bpmQ) / 2) * 2;
+  piece.title = St.t;
+  piece.texName = { rh: '右手', lh: '左手', altbar: '一小节一换手', split: '半小节一换手', uni: '两手同节奏', steadyL: '左手打拍子', steadyR: '右手打拍子', indep: '两手不同节奏' }[tex];
+  piece.swapped = false;
+  return piece;
+}
+
 /* ======================= 校验（测试用） ======================= */
 function validatePiece(pc) {
   const errs = [];
@@ -861,7 +981,8 @@ function generateAll(seed) {
   LEVELS.forEach((L, li) => {
     S.levelStart.push(S.exs.length);
     for (let ei = 0; ei < EX_PER_LEVEL; ei++) {
-      const pc = genExercise(li, ei, seed);
+      const pc = L.rhythm ? genRhythm(ei, seed) : genExercise(li - 1, ei, seed);
+      pc.li = li;
       pc.gi = S.exs.length;
       S.exs.push(pc);
     }
@@ -1058,7 +1179,7 @@ function renderAll(progressCb) {
     } else {
       const li = ex.li, ei = ex.ei, L = LEVELS[li];
       const tags = [ex.key.cn, ex.ts.name, tm, ex.texName, ex.swapped ? '左手旋律' : ''].filter(Boolean).map((t) => `<span class="tag">${t}</span>`).join('');
-      const lvName = li === 0 ? '入门' : L.name;
+      const lvName = L.name;
       const banner = ei === 0 ? `<div class="lvl-banner"><b>${lvName}</b><span class="en">${L.en}</span><span>${L.desc}</span></div>` : '';
       div.innerHTML = `<div class="ex-head">${banner}<div class="ex-line"><span class="ex-no"><span class="lv">${lvName}</span> 练习 ${ei + 1}<small>/${EX_PER_LEVEL}</small></span>${ex.title ? `<span class="ex-title">${ex.title}</span>` : ''}${tags}<span class="ex-score" id="sc${ex.gi}"></span></div></div><div class="ex-body"></div>`;
     }
@@ -1137,7 +1258,7 @@ function renderExercise(ex, div, cw, pageH, nLines, li) {
   if (!ex.learn) fgSightApply(ex, S.settings.fing !== false);
   ex.bars.forEach((bar) => buildBarVF(ex, bar));
   const body = div.querySelector('.ex-body');
-  const minMW = li <= 2 ? 130 : 100;
+  const minMW = li <= 3 ? 130 : 100;
   const widths = ex.bars.map((b) => Math.max(minMW, b.vf.minW * clamp(1.5 - b.vf.minW / 900, 1.06, 1.45) + 26));
   const mods0 = modsWidth(ex, true), mods1 = modsWidth(ex, false);
   // 固定行数：每行小节数相同
@@ -1725,7 +1846,7 @@ function showScore(gi, again) {
   const el = document.getElementById('sc' + gi);
   if (el) el.textContent = `正确率 ${pct}%  错音 ${sc.wrong}`;
   const ex = S.exs[gi];
-  const name = ex ? `${ex.li === 0 ? '入门' : LEVELS[ex.li].name} 练习 ${ex.ei + 1}` : '上一首';
+  const name = ex ? `${LEVELS[ex.li].name} 练习 ${ex.ei + 1}` : '上一首';
   HUD.last = `${name}：${pct}%`;
   toast(`${name}：正确率 ${pct}%（弹对 ${sc.hit}/${tot}，错音 ${sc.wrong}）` + (again ? (pct < PASS_PCT ? `，没到 ${PASS_PCT}%` : `，有 ${sc.wrong} 个错键`) + '，再弹一遍' : ''), true);
   if (!P.playing) toast._t = setTimeout(toastUnstick, 10000);
@@ -1865,7 +1986,7 @@ function updateStatus(bar) {
   const ex = S.exs[bar.ex];
   if (ex.learn) { $('status').innerHTML = `<b>${escHtml(ex.title)}</b> <span class="long">第 </span>${bar.num}/${ex.nBarsTotal}<span class="long"> 小节</span>`; updateSpeedLabel(); return; }
   const L = LEVELS[ex.li];
-  $('status').innerHTML = `<b>${ex.li === 0 ? '入门' : L.name}</b> <span class="long">练习 </span>${ex.ei + 1}/${EX_PER_LEVEL} · <span class="long">第 </span>${bar.bi + 1}/${ex.bars.length}<span class="long"> 小节</span>`;
+  $('status').innerHTML = `<b>${L.name}</b> <span class="long">练习 </span>${ex.ei + 1}/${EX_PER_LEVEL} · <span class="long">第 </span>${bar.bi + 1}/${ex.bars.length}<span class="long"> 小节</span>`;
   if ($('selLevel').value !== String(ex.li)) $('selLevel').value = String(ex.li);
   if ($('selEx').value !== String(ex.ei)) $('selEx').value = String(ex.ei);
   updateSpeedLabel();
@@ -1880,7 +2001,7 @@ function seek(exI, barI, scroll = true) {
   saveSettings();
   if (was) startPlay();
 }
-function saveSettings() { try { localStorage.setItem('sr.settings', JSON.stringify(S.settings)); if (!LM.active) localStorage.setItem('sr.lastLevel', String(S.exs[S.cur.ex]?.li ?? 0)); } catch (e) { } }
+function saveSettings() { try { localStorage.setItem('sr.settings', JSON.stringify(S.settings)); if (!LM.active) localStorage.setItem('sr.lastLevel2', String(S.exs[S.cur.ex]?.li ?? 0)); } catch (e) { } }
 function loadSettings() {
   // 矮屏（手机横屏）默认不显示屏幕键盘，把高度留给谱面
   S.settings.kbd = Math.min(window.innerWidth, window.innerHeight) >= 520;
@@ -1917,7 +2038,7 @@ async function regenerate(seed, keepLevel) {
 }
 function initUI() {
   const sel = $('selLevel');
-  LEVELS.forEach((L, i) => { const o = document.createElement('option'); o.value = i; o.textContent = i === 0 ? '入门' : L.name; sel.appendChild(o); });
+  LEVELS.forEach((L, i) => { const o = document.createElement('option'); o.value = i; o.textContent = L.name; sel.appendChild(o); });
   sel.onchange = () => seek(S.levelStart[+sel.value], 0);
   const selEx = $('selEx');
   for (let i = 0; i < EX_PER_LEVEL; i++) { const o = document.createElement('option'); o.value = i; o.textContent = `${i + 1}/${EX_PER_LEVEL}`; selEx.appendChild(o); }
@@ -2047,12 +2168,13 @@ async function main() {
   applySettingsToUI();
   const h = parseInt((location.hash || '').slice(1), 10);
   const seed = Number.isFinite(h) && h > 0 ? h : Math.floor(Math.random() * 900000) + 100000;
-  let lvl = 0; try { lvl = clamp(parseInt(localStorage.getItem('sr.lastLevel') || '0', 10) || 0, 0, LEVELS.length - 1); } catch (e) { }
+  let lvl = 0; try { const v2 = localStorage.getItem('sr.lastLevel2'), v1 = localStorage.getItem('sr.lastLevel');   // 旧版没有节奏级，记下的编号要加 1
+    lvl = clamp(v2 !== null ? parseInt(v2, 10) || 0 : v1 !== null ? (parseInt(v1, 10) || 0) + 1 : 0, 0, LEVELS.length - 1); } catch (e) { }
   await regenerate(seed, lvl);
   await learnRestore(initHash);
   requestAnimationFrame(frame);
   // 通过歌曲链接打开时直接看谱，不弹使用说明
   try { if (!localStorage.getItem('sr.seenHelp') && !isSongLink(initHash)) { $('help').classList.add('show'); localStorage.setItem('sr.seenHelp', '1'); } } catch (e) { }
 }
-window.__SR = { planGo, planStepLabel, planSteps, unrollOrder, pop909ToPiece, pop909clToPiece, pop909Load, get POP909() { return POP909; }, get LM() { return LM; }, get SCL() { return SC.L; }, learnPages, parseMusicXML, parseMidi, midiToPiece, unzipMusicXML, inflateJS, learnEnter, learnExit, buildTimeline, renderAll, ensureRendered, AU, MIDI, onNoteOn, FOL, SC, posT0, setSpeed, S, P, genExercise, validatePiece, LEVELS, EX_PER_LEVEL, generateAll, seek, startPlay, stopPlay, buildBarVF, modsWidth };
+window.__SR = { planGo, planStepLabel, planSteps, unrollOrder, pop909ToPiece, pop909clToPiece, pop909Load, get POP909() { return POP909; }, get LM() { return LM; }, get SCL() { return SC.L; }, learnPages, parseMusicXML, parseMidi, midiToPiece, unzipMusicXML, inflateJS, learnEnter, learnExit, buildTimeline, renderAll, ensureRendered, AU, MIDI, onNoteOn, FOL, SC, posT0, setSpeed, S, P, genExercise, genRhythm, validatePiece, LEVELS, EX_PER_LEVEL, generateAll, seek, startPlay, stopPlay, buildBarVF, modsWidth };
 window.addEventListener('DOMContentLoaded', main);
